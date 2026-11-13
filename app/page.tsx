@@ -305,8 +305,12 @@ export default function FalkHomePage() {
     };
   }, [loadUserData]);
 
-  // Scrolla till senaste meddelandet
+  // Scrolla till toppen på startsidan (tom chatt) och till senaste meddelandet i aktiv chatt
   useEffect(() => {
+    if (messages.length === 0 && !isSending) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSending]);
 
@@ -342,6 +346,9 @@ export default function FalkHomePage() {
 
   // Ny chatt
   const handleNewChat = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       setSpeakingMessageId(null);
