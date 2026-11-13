@@ -90,6 +90,7 @@ export default function ActionModals({
   const [isAdultConfirmed, setIsAdultConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showLegalDoc, setShowLegalDoc] = useState<'terms' | 'privacy' | null>(null);
+  const [promoCode, setPromoCode] = useState('');
 
   // Feedback state
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -192,6 +193,37 @@ export default function ActionModals({
     }
   };
 
+  const redeemPromoCode = async (rawCode: string) => {
+    const trimmed = rawCode.trim();
+    if (!trimmed) {
+      setErrorMsg('Ange en giltig rabattkod.');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${backendUrl}/api/billing/redeem-promo`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ code: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || 'Ogiltig eller inaktiv rabattkod.');
+      }
+      setPromoCode('');
+      setSuccessMsg(data.message || 'Premium har aktiverats!');
+      await onAuthSuccess();
+      setTimeout(() => onClose(), 900);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Kunde inte aktivera rabattkoden.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openBillingPortal = async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -279,7 +311,9 @@ export default function ActionModals({
 
         if (!signUpData.session) {
           setSuccessMsg(
-            activeModal === 'paywall'
+            promoCode.trim()
+              ? 'Konto skapat! Bekräfta din e-postadress via länken vi skickat och logga sedan in för att aktivera din rabattkod.'
+              : activeModal === 'paywall'
               ? 'Konto skapat! Bekräfta din e-postadress via länken vi skickat och logga sedan in för att aktivera Premium.'
               : 'Konto skapat! Kontrollera din e-post och bekräfta ditt konto innan du loggar in.'
           );
@@ -287,7 +321,9 @@ export default function ActionModals({
         }
 
         await onAuthSuccess();
-        if (activeModal === 'paywall') {
+        if (promoCode.trim()) {
+          await redeemPromoCode(promoCode);
+        } else if (activeModal === 'paywall') {
           await startStripeCheckout();
         } else {
           setSuccessMsg('Konto skapat!');
@@ -630,6 +666,30 @@ export default function ActionModals({
                 >
                   {loading ? 'Öppnar Stripe...' : 'Uppgradera till FALK Premium →'}
                 </button>
+
+                <div className="pt-2 border-t border-[#D8CCB8]/60">
+                  <label className={`block text-xs font-medium mb-1.5 ${subText}`}>
+                    Har du en rabattkod eller VIP-kod?
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
+                      placeholder="Ange kod"
+                      maxLength={64}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-sm uppercase tracking-wider ${inputBg}`}
+                    />
+                    <button
+                      type="button"
+                      disabled={loading || !promoCode.trim()}
+                      onClick={() => redeemPromoCode(promoCode)}
+                      className="rounded-xl bg-[#4E5C4B] px-4 py-2 text-sm font-medium text-white hover:bg-[#3f4b3c] transition disabled:opacity-50"
+                    >
+                      Aktivera
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <>
@@ -755,6 +815,20 @@ export default function ActionModals({
                           )}
                         </div>
                       )}
+
+                      <div className="pt-1">
+                        <label className={`block text-xs font-medium mb-1 ${subText}`}>
+                          Rabattkod / VIP-kod (valfritt)
+                        </label>
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value)}
+                          placeholder="Ange kod om du har en"
+                          maxLength={64}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm uppercase tracking-wider ${inputBg}`}
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -767,6 +841,8 @@ export default function ActionModals({
                       ? 'Bearbetar...'
                       : authMode === 'login'
                       ? 'Logga in'
+                      : promoCode.trim()
+                      ? 'Skapa konto & aktivera kod'
                       : activeModal === 'paywall'
                       ? 'Skapa konto & fortsätt till betalning'
                       : 'Skapa konto'}
