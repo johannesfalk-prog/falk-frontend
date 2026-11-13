@@ -214,6 +214,9 @@ export default function ActionModals({
         throw new Error(data.message || data.error || 'Ogiltig eller inaktiv rabattkod.');
       }
       setPromoCode('');
+      try {
+        window.sessionStorage.removeItem('falk_pending_promo');
+      } catch {}
       setSuccessMsg(data.message || 'Premium har aktiverats!');
       await onAuthSuccess();
       setTimeout(() => onClose(), 900);
@@ -271,14 +274,56 @@ export default function ActionModals({
     setLoading(true);
     try {
       if (authMode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({
           email: emailInput.trim(),
           password: passwordInput,
         });
         if (error) throw error;
+
+        if (signInData.user) {
+          const meta = (signInData.user.user_metadata || {}) as Record<string, unknown>;
+          const adultOk = Boolean(meta.is_adult_confirmed || meta.age_verified_18_plus);
+          const termsAt =
+            typeof meta.terms_accepted_at === 'string'
+              ? meta.terms_accepted_at
+              : meta.terms_accepted
+              ? new Date().toISOString()
+              : null;
+          if (adultOk && termsAt) {
+            await supabase.from('user_profiles').upsert(
+              {
+                id: signInData.user.id,
+                user_id: signInData.user.id,
+                email: signInData.user.email || emailInput.trim(),
+                display_name:
+                  (typeof meta.display_name === 'string' && meta.display_name.trim()) ||
+                  emailInput.split('@')[0],
+                is_adult_confirmed: true,
+                terms_accepted_at: termsAt,
+                privacy_accepted_at:
+                  typeof meta.privacy_accepted_at === 'string' ? meta.privacy_accepted_at : termsAt,
+              },
+              { onConflict: 'id' }
+            );
+          }
+        }
+
         await onAuthSuccess();
-        setSuccessMsg('Inloggad!');
-        setTimeout(() => onClose(), 500);
+
+        let pendingPromo = promoCode.trim();
+        if (!pendingPromo) {
+          try {
+            pendingPromo = (window.sessionStorage.getItem('falk_pending_promo') || '').trim();
+          } catch {}
+        }
+
+        if (pendingPromo) {
+          setPromoCode(pendingPromo);
+          await redeemPromoCode(pendingPromo);
+        } else {
+          setSuccessMsg('Inloggad!');
+          setTimeout(() => onClose(), 500);
+        }
       } else {
         const nowIso = new Date().toISOString();
         const { data: signUpData, error } = await supabase.auth.signUp({
@@ -298,6 +343,7 @@ export default function ActionModals({
         if (signUpData.user && signUpData.session) {
           await supabase.from('user_profiles').upsert(
             {
+              id: signUpData.user.id,
               user_id: signUpData.user.id,
               email: emailInput.trim(),
               display_name: nameInput.trim() || emailInput.split('@')[0],
@@ -305,17 +351,24 @@ export default function ActionModals({
               terms_accepted_at: nowIso,
               privacy_accepted_at: nowIso,
             },
-            { onConflict: 'user_id' }
+            { onConflict: 'id' }
           );
         }
 
         if (!signUpData.session) {
+          const trimmedPromo = promoCode.trim();
+          if (trimmedPromo) {
+            try {
+              window.sessionStorage.setItem('falk_pending_promo', trimmedPromo);
+            } catch {}
+          }
+          setAuthMode('login');
           setSuccessMsg(
-            promoCode.trim()
-              ? 'Konto skapat! Bekräfta din e-postadress via länken vi skickat och logga sedan in för att aktivera din rabattkod.'
+            trimmedPromo
+              ? 'Konto skapat! Bekräfta din e-postadress via länken vi skickat och logga sedan in nedan för att aktivera din rabattkod.'
               : activeModal === 'paywall'
-              ? 'Konto skapat! Bekräfta din e-postadress via länken vi skickat och logga sedan in för att aktivera Premium.'
-              : 'Konto skapat! Kontrollera din e-post och bekräfta ditt konto innan du loggar in.'
+              ? 'Konto skapat! Bekräfta din e-postadress via länken vi skickat och logga sedan in nedan för att aktivera Premium.'
+              : 'Konto skapat! Kontrollera din e-post och bekräfta ditt konto innan du loggar in nedan.'
           );
           return;
         }
