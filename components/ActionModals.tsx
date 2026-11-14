@@ -863,20 +863,49 @@ export default function ActionModals({
                       </label>
 
                       {showLegalDoc && (
-                        <div className="rounded-xl border border-[#D8CCB8] bg-black/5 p-3 text-[11px] leading-relaxed">
+                        <div className="max-h-44 overflow-y-auto rounded-xl border border-[#D8CCB8] bg-black/5 p-3 text-[11px] leading-relaxed space-y-2">
                           {showLegalDoc === 'terms' ? (
-                            <p>
-                              <strong>Användarvillkor (WAYJS / FALK):</strong> FALK är en digital
-                              mentor för självreflektion och personlig utveckling – inte sjukvård,
-                              terapi eller juridisk/finansiell rådgivning. Konto kräver 18 års ålder.
-                            </p>
+                            <>
+                              <p className="font-semibold">Användarvillkor v2.5 (WAYJS / FALK)</p>
+                              <p>
+                                <strong>1. Tjänstens syfte &amp; avgränsning:</strong> FALK är en digital
+                                mentor för strukturerad självreflektion, självledarskap och personlig
+                                utveckling. FALK är inte hälso- och sjukvård, psykoterapi, medicinsk
+                                rådgivning eller juridisk/finansiell rådgivning. Vid akut kris eller
+                                vårdbehov ska legitimerad vård eller akuta hjälplinjer kontaktas.
+                              </p>
+                              <p>
+                                <strong>2. Åldersgräns &amp; konto:</strong> Gästläget kan provas utan
+                                konto (begränsat till 6 meddelanden/dygn). För att skapa konto och
+                                teckna Premium-medlemskap krävs att du har fyllt 18 år.
+                              </p>
+                              <p>
+                                <strong>3. Medlemskap &amp; eget ansvar:</strong> Premium hanteras
+                                löpande via Stripe och kan avslutas när som helst under Inställningar.
+                                Du äger alltid dina egna val, beslut och handlingar.
+                              </p>
+                            </>
                           ) : (
-                            <p>
-                              <strong>Integritetspolicy (GDPR):</strong> Dina samtal, kompassvärden,
-                              insikter och mål lagras krypterat med strikt åtkomstkontroll (RLS). Du
-                              kan när som helst exportera all din data eller radera ditt konto
-                              permanent under Inställningar.
-                            </p>
+                            <>
+                              <p className="font-semibold">Integritetspolicy (GDPR) v2.5 (WAYJS / FALK)</p>
+                              <p>
+                                <strong>1. Dataminimering:</strong> Vi behandlar endast uppgifter som
+                                behövs för att leverera tjänsten och följa din utveckling: kontouppgifter,
+                                samtalsmeddelanden, kompassvärden, sparade insikter, påminnelser och mål.
+                              </p>
+                              <p>
+                                <strong>2. Säkerhet &amp; RLS:</strong> All användardata lagras
+                                krypterat i EU/EES med strikt radnivåsäkerhet (Row Level Security) så
+                                att enbart ditt konto har åtkomst till din historik. Betalningar
+                                hanteras säkert av Stripe.
+                              </p>
+                              <p>
+                                <strong>3. Dina GDPR-rättigheter:</strong> Du kan när som helst ladda
+                                ner ett komplett registerutdrag i JSON-format (inklusive Dashboard-data)
+                                eller permanents radera ditt konto och all associerad data under
+                                Inställningar &amp; Integritet.
+                              </p>
+                            </>
                           )}
                         </div>
                       )}
@@ -1263,39 +1292,94 @@ export default function ActionModals({
               )}
             </div>
 
-            {/* Juridiska dokument */}
-            <div className="rounded-xl border border-[#D8CCB8]/60 p-3 space-y-2">
-              <p className="text-sm font-medium">Villkor &amp; Integritetspolicy</p>
-              <div className="flex gap-2">
+            {/* Juridiska dokument (v2.5) */}
+            <div className="rounded-xl border border-[#D8CCB8]/60 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Villkor &amp; Integritetspolicy</p>
+                <span className="rounded-full border border-[#D8CCB8] px-2 py-0.5 text-[10px] font-semibold tracking-wide opacity-80">
+                  Version 2.5
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setShowLegalDoc(showLegalDoc === 'terms' ? null : 'terms')}
-                  className="rounded-lg border border-[#D8CCB8] px-3 py-1 text-xs hover:bg-black/5"
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                    showLegalDoc === 'terms'
+                      ? 'border-[#4E5C4B] bg-[#4E5C4B] text-white'
+                      : 'border-[#D8CCB8] hover:bg-black/5'
+                  }`}
                 >
-                  Läs Användarvillkor
+                  Användarvillkor v2.5
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowLegalDoc(showLegalDoc === 'privacy' ? null : 'privacy')}
-                  className="rounded-lg border border-[#D8CCB8] px-3 py-1 text-xs hover:bg-black/5"
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                    showLegalDoc === 'privacy'
+                      ? 'border-[#4E5C4B] bg-[#4E5C4B] text-white'
+                      : 'border-[#D8CCB8] hover:bg-black/5'
+                  }`}
                 >
-                  Läs Integritetspolicy
+                  Integritetspolicy v2.5
                 </button>
               </div>
               {showLegalDoc && (
-                <div className="rounded-lg bg-black/5 p-2.5 text-xs leading-relaxed">
+                <div className="max-h-[45vh] overflow-y-auto rounded-lg border border-[#D8CCB8]/60 bg-black/5 p-3 text-xs leading-relaxed space-y-2.5">
                   {showLegalDoc === 'terms' ? (
-                    <p>
-                      <strong>Användarvillkor (FALK / WAYJS):</strong> Tjänsten tillhandahåller
-                      strukturerad självreflektion och digitalt mentorskap. Premium kräver minst 18
-                      års ålder. FALK ersätter inte medicinsk, psykologisk eller juridisk expertis.
-                    </p>
+                    <>
+                      <p className="font-semibold">Användarvillkor v2.5 – WAYJS / FALK (Gällande 2026)</p>
+                      <p>
+                        <strong>1. Tjänstens omfattning:</strong> FALK är en digital mentor byggd på
+                        Wayjs metodik för självreflektion, omdöme och självledarskap. Tjänsten
+                        utgör inte hälso- och sjukvård, psykologisk behandling, terapi eller
+                        juridisk/finansiell rådgivning. Vid akut kris eller behov av professionell
+                        vård ska legitimerad vårdgivare eller akuta resurser kontaktas.
+                      </p>
+                      <p>
+                        <strong>2. Ålderskrav &amp; kontonivåer:</strong> Gästläget kan användas utan
+                        registrering med en begränsning på 6 meddelanden och svar per dygn.
+                        Kontoregistrering och Premium-medlemskap kräver att användaren är minst 18 år.
+                      </p>
+                      <p>
+                        <strong>3. Prenumeration &amp; betalning:</strong> Premium debiteras löpande
+                        via Stripe. Du kan när som helst administrera betalningsmetod eller säga upp
+                        ditt medlemskap under <em>Hantera medlemskap &amp; betalningsmetod</em> ovan.
+                      </p>
+                      <p>
+                        <strong>4. Användarens självbestämmande:</strong> FALK ger perspektiv och
+                        reflektionsfrågor, men du äger alltid fullt ansvar för dina egna beslut,
+                        prioriteringar och handlingar.
+                      </p>
+                    </>
                   ) : (
-                    <p>
-                      <strong>Integritetspolicy (GDPR):</strong> All persondata behandlas enligt
-                      EU:s dataskyddsförordning (GDPR). Du har full rätt till registerutdrag
-                      (JSON-export nedan) och rätten att bli glömd genom permanent kontoradering.
-                    </p>
+                    <>
+                      <p className="font-semibold">Integritetspolicy (GDPR) v2.5 – WAYJS / FALK (Gällande 2026)</p>
+                      <p>
+                        <strong>1. Personuppgifter som behandlas:</strong> Vi tillämpar strikt
+                        dataminimering och lagrar enbart uppgifter som krävs för tjänsten:
+                        e-postadress, visningsnamn, konversationshistorik, kompasskalibreringar,
+                        sparade insikter, påminnelser, mål samt prenumerationsstatus.
+                      </p>
+                      <p>
+                        <strong>2. Lagring, kryptering &amp; åtkomstkontroll:</strong> All data
+                        skyddas med kryptering och radnivåsäkerhet (Row Level Security / RLS),
+                        vilket säkerställer att endast ditt autentiserade konto kommer åt dina
+                        uppgifter. Dina samtal säljs aldrig vidare till tredje part.
+                      </p>
+                      <p>
+                        <strong>3. Betalningar &amp; underbiträden:</strong> Betalningsuppgifter
+                        hanteras uteslutande av PCI-certifierade Stripe. AI-generering sker via
+                        krypterade API-anrop med dataskyddsavtal.
+                      </p>
+                      <p>
+                        <strong>4. Rätt till registerutdrag &amp; radering (GDPR art. 15 &amp; 17):</strong>{' '}
+                        Du har full rätt att när som helst exportera all din lagrade data i
+                        maskinläsbart JSON-format (inklusive Dashboard-historik) samt att
+                        omedelbart och permanent radera ditt konto, all din data och eventuellt
+                        aktivt medlemskap via knapparna nedan.
+                      </p>
+                    </>
                   )}
                 </div>
               )}

@@ -32,6 +32,60 @@ interface LibraryViewProps {
 
 type SortOption = 'default' | 'title_asc' | 'category_asc';
 
+const CATEGORY_PALETTES = [
+  {
+    light: "border border-[#C6D6BC] bg-[#E5ECDF] text-[#354732]",
+    dark: "border border-[#384B36] bg-[#263325] text-[#A8BFA1]",
+  },
+  {
+    light: "border border-[#E5C4AE] bg-[#F5E4D7] text-[#8A4626]",
+    dark: "border border-[#54372B] bg-[#38251D] text-[#E6A382]",
+  },
+  {
+    light: "border border-[#E0BFC4] bg-[#F2E0E2] text-[#7D3842]",
+    dark: "border border-[#523338] bg-[#362225] text-[#E2A3AC]",
+  },
+  {
+    light: "border border-[#C2CBE0] bg-[#E2E6F0] text-[#354366]",
+    dark: "border border-[#343C54] bg-[#232838] text-[#A9B8E0]",
+  },
+  {
+    light: "border border-[#B8D6D0] bg-[#DCECE9] text-[#28544E]",
+    dark: "border border-[#2D4B46] bg-[#1E322F] text-[#94CFC6]",
+  },
+  {
+    light: "border border-[#E0CFA8] bg-[#F3E9D2] text-[#6E5219]",
+    dark: "border border-[#4D4129] bg-[#332B1B] text-[#E0C382]",
+  },
+  {
+    light: "border border-[#D1C2E0] bg-[#EAE3F0] text-[#4E3866]",
+    dark: "border border-[#413452] bg-[#2B2336] text-[#C5B0E0]",
+  },
+];
+
+function getCategoryBadgeClasses(category: string, darkMode: boolean): string {
+  const key = (category || "").trim().toLowerCase();
+  let idx = -1;
+
+  if (/(personlig|självledarskap|identitet|självkänsla|självförtroende)/.test(key)) idx = 0;
+  else if (/(arbete|jobb|karriär|ledarskap|fokus|produktivitet|handlingskraft)/.test(key)) idx = 1;
+  else if (/(relation|familj|kommunikation|gräns|intim)/.test(key)) idx = 2;
+  else if (/(liv|riktning|mening|spiritualitet|kompass|värdering)/.test(key)) idx = 3;
+  else if (/(hälsa|träning|stress|återhämtning|lugn|energi|balans)/.test(key)) idx = 4;
+  else if (/(finans|ekonomi|ägodelar|beslut|tanke|perspektiv)/.test(key)) idx = 5;
+  else if (/(motivation|vana|vanor|utveckling|lärande)/.test(key)) idx = 6;
+  else {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    }
+    idx = hash % CATEGORY_PALETTES.length;
+  }
+
+  const palette = CATEGORY_PALETTES[idx];
+  return darkMode ? palette.dark : palette.light;
+}
+
 export default function LibraryView({
   backendUrl,
   getAuthHeaders,
@@ -316,11 +370,10 @@ export default function LibraryView({
                 <div>
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
+                        card.category,
                         darkMode
-                          ? 'bg-[#2C352B] text-[#A8BFA1]'
-                          : 'bg-[#E5ECDF] text-[#3F4D3C]'
-                      }`}
+                      )}`}
                     >
                       <Sparkles className="h-3 w-3" />
                       {card.category}

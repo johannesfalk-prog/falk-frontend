@@ -26,7 +26,6 @@ import {
   Sparkles,
   BookOpen,
   TrendingUp,
-  ArrowLeftRight,
 } from 'lucide-react';
 import { supabase, getAuthHeaders } from '../lib/supabase';
 import {
@@ -81,7 +80,6 @@ export default function FalkHomePage() {
   const [isLeftOpen, setIsLeftOpen] = useState(false);
   const [isRightOpen, setIsRightOpen] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(true);
-  const [mobileDockSide, setMobileDockSide] = useState<'right' | 'left'>('right');
 
   // Auth & användarprofil
   const [userId, setUserId] = useState<string | null>(null);
@@ -148,20 +146,8 @@ export default function FalkHomePage() {
     setActiveModal('paywall');
   }, []);
 
-  const toggleMobileDockSide = () => {
-    setMobileDockSide((prev) => {
-      const next = prev === 'right' ? 'left' : 'right';
-      localStorage.setItem('falk_mobile_dock_side', next);
-      return next;
-    });
-  };
-
   // Initiera tema, guestUuid och lokal kalibrering
   useEffect(() => {
-    const savedDockSide = localStorage.getItem('falk_mobile_dock_side');
-    if (savedDockSide === 'left' || savedDockSide === 'right') {
-      setMobileDockSide(savedDockSide);
-    }
     const savedTheme = localStorage.getItem('falk_dark_mode');
     if (savedTheme === 'true') setDarkMode(true);
     setGuestUuid(getOrCreateGuestUuid());
@@ -968,11 +954,7 @@ export default function FalkHomePage() {
       </header>
 
       {/* HUVUDINNEHÅLL */}
-      <main
-        className={`flex-1 w-full max-w-3xl mx-auto pt-6 pb-40 md:px-4 flex flex-col ${
-          mobileDockSide === 'right' ? 'pl-4 pr-14' : 'pl-14 pr-4'
-        }`}
-      >
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-6 pb-44 flex flex-col">
         {activeView === 'chat' && (
           <>
             {/* VÄLKOMSTKORT + KOMPASSKALIBRERING */}
@@ -1157,208 +1139,226 @@ export default function FalkHomePage() {
                     </div>
 
                     {/* DE 9 SVARSIKONERNA UNDER VARJE FALK-MEDDELANDE */}
-                    <div className="flex flex-wrap items-center gap-1.5 mt-2 ml-1">
-                      {/* 1. Högtalare (TTS - Öppen för gäst) */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSpeak(msg)}
-                        title={
-                          speakingMessageId === msg.id
-                            ? 'Stoppa uppläsning'
-                            : 'Läs upp svar'
-                        }
-                        className={`p-1.5 rounded-lg transition ${
-                          speakingMessageId === msg.id
-                            ? 'bg-[#C57B57] text-white'
-                            : darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                    <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-1.5 pb-1 ml-0.5">
+                      {/* Kluster 1: 4 öppna interaktionsikoner */}
+                      <div
+                        className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border ${
+                          darkMode
+                            ? 'bg-[#23211D]/80 border-[#32302B]'
+                            : 'bg-[#F2ECE0]/85 border-[#DCD0B6]'
                         }`}
                       >
-                        {speakingMessageId === msg.id ? (
-                          <VolumeX className="w-4 h-4" />
-                        ) : (
-                          <Volume2 className="w-4 h-4" />
-                        )}
-                      </button>
-
-                      {/* 2. Nytt svar (Karusell - Öppen för gäst) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleGenerateVariation(msg, idx, 'regenerate')
-                        }
-                        disabled={variationLoadingId === msg.id}
-                        title="Nytt svar (alternativ formulering)"
-                        className={`p-1.5 rounded-lg transition ${
-                          darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        } disabled:opacity-40`}
-                      >
-                        <RefreshCw
-                          className={`w-4 h-4 ${
-                            variationLoadingId === msg.id ? 'animate-spin' : ''
+                        {/* 1. Högtalare (TTS - Öppen för gäst) */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSpeak(msg)}
+                          title={
+                            speakingMessageId === msg.id
+                              ? 'Stoppa uppläsning'
+                              : 'Läs upp svar'
+                          }
+                          className={`min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            speakingMessageId === msg.id
+                              ? 'bg-[#C57B57] text-white'
+                              : darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
                           }`}
-                        />
-                      </button>
+                        >
+                          {speakingMessageId === msg.id ? (
+                            <VolumeX className="w-4 h-4" />
+                          ) : (
+                            <Volume2 className="w-4 h-4" />
+                          )}
+                        </button>
 
-                      {/* 3. Tumme upp (Öppen för gäst) */}
-                      <button
-                        type="button"
-                        onClick={() => handleFeedbackClick(msg, 'positive')}
-                        title="Bra svar"
-                        className={`p-1.5 rounded-lg transition ${
-                          msg.feedback === 'up'
-                            ? 'text-[#4E5C4B] bg-[#A8BFA1]/30'
-                            : darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        }`}
-                      >
-                        <ThumbsUp className="w-4 h-4" />
-                      </button>
+                        {/* 2. Nytt svar (Karusell - Öppen för gäst) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleGenerateVariation(msg, idx, 'regenerate')
+                          }
+                          disabled={variationLoadingId === msg.id}
+                          title="Nytt svar (alternativ formulering)"
+                          className={`min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          } disabled:opacity-40`}
+                        >
+                          <RefreshCw
+                            className={`w-4 h-4 ${
+                              variationLoadingId === msg.id ? 'animate-spin' : ''
+                            }`}
+                          />
+                        </button>
 
-                      {/* 4. Tumme ner (Öppen för gäst) */}
-                      <button
-                        type="button"
-                        onClick={() => handleFeedbackClick(msg, 'negative')}
-                        title="Mindre bra / Rapportera"
-                        className={`p-1.5 rounded-lg transition ${
-                          msg.feedback === 'down'
-                            ? 'text-[#C57B57] bg-[#C57B57]/20'
-                            : darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        }`}
-                      >
-                        <ThumbsDown className="w-4 h-4" />
-                      </button>
+                        {/* 3. Tumme upp (Öppen för gäst) */}
+                        <button
+                          type="button"
+                          onClick={() => handleFeedbackClick(msg, 'positive')}
+                          title="Bra svar"
+                          className={`min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            msg.feedback === 'up'
+                              ? 'text-[#4E5C4B] bg-[#A8BFA1]/30'
+                              : darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <ThumbsUp className="w-4 h-4" />
+                        </button>
 
-                      {/* 5. Plus - Längre/djupare svar (Premium) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleGenerateVariation(msg, idx, 'longer')
-                        }
-                        title={
-                          isPremium
-                            ? 'Fördjupa svaret (+)'
-                            : 'Premium: Fördjupa svaret (+)'
-                        }
-                        className={`relative p-1.5 rounded-lg transition ${
+                        {/* 4. Tumme ner (Öppen för gäst) */}
+                        <button
+                          type="button"
+                          onClick={() => handleFeedbackClick(msg, 'negative')}
+                          title="Mindre bra / Rapportera"
+                          className={`min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            msg.feedback === 'down'
+                              ? 'text-[#C57B57] bg-[#C57B57]/20'
+                              : darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <ThumbsDown className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Kluster 2: 5 Premium-verktyg */}
+                      <div
+                        className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border ${
                           darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                            ? 'bg-[#23211D]/80 border-[#32302B]'
+                            : 'bg-[#F2ECE0]/85 border-[#DCD0B6]'
                         }`}
                       >
-                        <Plus className="w-4 h-4" />
-                        {!isPremium && (
-                          <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
-                        )}
-                      </button>
+                        {/* 5. Plus - Längre/djupare svar (Premium) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleGenerateVariation(msg, idx, 'longer')
+                          }
+                          title={
+                            isPremium
+                              ? 'Fördjupa svaret (+)'
+                              : 'Premium: Fördjupa svaret (+)'
+                          }
+                          className={`relative min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <Plus className="w-4 h-4" />
+                          {!isPremium && (
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                          )}
+                        </button>
 
-                      {/* 6. Minus - Kortare/koncist svar (Premium) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleGenerateVariation(msg, idx, 'shorter')
-                        }
-                        title={
-                          isPremium
-                            ? 'Korta ner svaret (-)'
-                            : 'Premium: Korta ner svaret (-)'
-                        }
-                        className={`relative p-1.5 rounded-lg transition ${
-                          darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        }`}
-                      >
-                        <Minus className="w-4 h-4" />
-                        {!isPremium && (
-                          <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
-                        )}
-                      </button>
+                        {/* 6. Minus - Kortare/koncist svar (Premium) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleGenerateVariation(msg, idx, 'shorter')
+                          }
+                          title={
+                            isPremium
+                              ? 'Korta ner svaret (-)'
+                              : 'Premium: Korta ner svaret (-)'
+                          }
+                          className={`relative min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <Minus className="w-4 h-4" />
+                          {!isPremium && (
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                          )}
+                        </button>
 
-                      {/* 7. Klocka - Skapa påminnelse (Premium) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handlePremiumActionIcon(
-                            msg,
-                            'reminder',
-                            'Påminnelser kopplade till dina samtal ingår i FALK Premium.'
-                          )
-                        }
-                        title={
-                          isPremium
-                            ? 'Skapa påminnelse'
-                            : 'Premium: Skapa påminnelse'
-                        }
-                        className={`relative p-1.5 rounded-lg transition ${
-                          darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        }`}
-                      >
-                        <Bell className="w-4 h-4" />
-                        {!isPremium && (
-                          <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
-                        )}
-                      </button>
+                        {/* 7. Klocka - Skapa påminnelse (Premium) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePremiumActionIcon(
+                              msg,
+                              'reminder',
+                              'Påminnelser kopplade till dina samtal ingår i FALK Premium.'
+                            )
+                          }
+                          title={
+                            isPremium
+                              ? 'Skapa påminnelse'
+                              : 'Premium: Skapa påminnelse'
+                          }
+                          className={`relative min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <Bell className="w-4 h-4" />
+                          {!isPremium && (
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                          )}
+                        </button>
 
-                      {/* 8. Pin - Spara som insikt (Premium) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handlePremiumActionIcon(
-                            msg,
-                            'insight',
-                            'Att spara insikter med ursprungskontext ingår i FALK Premium.'
-                          )
-                        }
-                        title={
-                          isPremium
-                            ? 'Spara som insikt'
-                            : 'Premium: Spara som insikt'
-                        }
-                        className={`relative p-1.5 rounded-lg transition ${
-                          darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        }`}
-                      >
-                        <Pin className="w-4 h-4" />
-                        {!isPremium && (
-                          <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
-                        )}
-                      </button>
+                        {/* 8. Pin - Spara som insikt (Premium) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePremiumActionIcon(
+                              msg,
+                              'insight',
+                              'Att spara insikter med ursprungskontext ingår i FALK Premium.'
+                            )
+                          }
+                          title={
+                            isPremium
+                              ? 'Spara som insikt'
+                              : 'Premium: Spara som insikt'
+                          }
+                          className={`relative min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <Pin className="w-4 h-4" />
+                          {!isPremium && (
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                          )}
+                        </button>
 
-                      {/* 9. Måltavla - Skapa mål (Premium) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handlePremiumActionIcon(
-                            msg,
-                            'goal',
-                            'Mål och utvecklingsuppföljning i Min utveckling ingår i FALK Premium.'
-                          )
-                        }
-                        title={
-                          isPremium ? 'Skapa mål' : 'Premium: Skapa mål'
-                        }
-                        className={`relative p-1.5 rounded-lg transition ${
-                          darkMode
-                            ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
-                            : 'text-[#5A544B] hover:bg-[#DCD0B6]'
-                        }`}
-                      >
-                        <Target className="w-4 h-4" />
-                        {!isPremium && (
-                          <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
-                        )}
-                      </button>
+                        {/* 9. Måltavla - Skapa mål (Premium) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePremiumActionIcon(
+                              msg,
+                              'goal',
+                              'Mål och utvecklingsuppföljning i Min utveckling ingår i FALK Premium.'
+                            )
+                          }
+                          title={
+                            isPremium ? 'Skapa mål' : 'Premium: Skapa mål'
+                          }
+                          className={`relative min-w-[32px] min-h-[32px] flex items-center justify-center p-1.5 rounded-lg transition ${
+                            darkMode
+                              ? 'text-[#B8B0A2] hover:bg-[#2A2824]'
+                              : 'text-[#5A544B] hover:bg-[#DCD0B6]'
+                          }`}
+                        >
+                          <Target className="w-4 h-4" />
+                          {!isPremium && (
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1422,123 +1422,111 @@ export default function FalkHomePage() {
         )}
       </main>
 
-      {/* MOBIL ENHANDS-IKONRAD (TIKTOK-STIL MED HÖGER/VÄNSTER-VAL) */}
-      <aside
+      {/* MOBIL SNABBMENY (HORISONTELL PILL OVANFÖR SKRIVFÄLT) */}
+      <nav
         aria-label="Snabbmeny mobil"
-        className={`fixed z-20 md:hidden bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] flex flex-col items-center gap-2 p-1.5 rounded-2xl border shadow-md backdrop-blur-md transition-all ${
-          mobileDockSide === 'right' ? 'right-2' : 'left-2'
-        } ${
-          darkMode
-            ? 'bg-[#23221F]/90 border-[#3A3832] text-[#F5EFE6]'
-            : 'bg-[#FAF7F0]/90 border-[#D5C7AC] text-[#1C1C1C]'
-        }`}
+        className="fixed inset-x-0 z-20 md:hidden bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px))] flex justify-center px-4 pointer-events-none"
       >
-        <button
-          type="button"
-          onClick={handleNewChat}
-          title="Ny chatt"
-          aria-label="Ny chatt"
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
-            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+        <div
+          className={`pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border shadow-md backdrop-blur-md transition-all ${
+            darkMode
+              ? 'bg-[#23221F]/92 border-[#3A3832] text-[#F5EFE6]'
+              : 'bg-[#FAF7F0]/92 border-[#D5C7AC] text-[#1C1C1C]'
           }`}
         >
-          <Plus className="w-5 h-5" strokeWidth={2.1} />
-        </button>
+          <button
+            type="button"
+            onClick={handleNewChat}
+            title="Ny chatt"
+            aria-label="Ny chatt"
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95 ${
+              darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+            }`}
+          >
+            <Plus className="w-5 h-5" strokeWidth={2.1} />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setCalibrationView('wizard');
-            setIsCalibrationOpen(true);
-          }}
-          title="Kompasskalibrering"
-          aria-label="Kompasskalibrering"
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
-            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
-          }`}
-        >
-          <Compass className="w-5 h-5" strokeWidth={2} />
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCalibrationView('wizard');
+              setIsCalibrationOpen(true);
+            }}
+            title="Kompasskalibrering"
+            aria-label="Kompasskalibrering"
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95 ${
+              darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+            }`}
+          >
+            <Compass className="w-5 h-5" strokeWidth={2} />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (isGuest) {
-              openPaywall('Biblioteket med 15 guidade övningar låses upp när du skapar konto eller uppgraderar till FALK Premium.');
-              return;
-            }
-            setActiveView(activeView === 'library' ? 'chat' : 'library');
-          }}
-          title="Bibliotek"
-          aria-label="Bibliotek"
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
-            activeView === 'library'
-              ? 'bg-[#4E5C4B] text-white'
-              : darkMode
-                ? 'hover:bg-[#32302B]'
-                : 'hover:bg-[#E8DCC4]/70'
-          }`}
-        >
-          <BookOpen className="w-5 h-5" strokeWidth={2} />
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isGuest) {
+                openPaywall('Biblioteket med 15 guidade övningar låses upp när du skapar konto eller uppgraderar till FALK Premium.');
+                return;
+              }
+              setActiveView(activeView === 'library' ? 'chat' : 'library');
+            }}
+            title="Bibliotek"
+            aria-label="Bibliotek"
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95 ${
+              activeView === 'library'
+                ? 'bg-[#4E5C4B] text-white'
+                : darkMode
+                  ? 'hover:bg-[#32302B]'
+                  : 'hover:bg-[#E8DCC4]/70'
+            }`}
+          >
+            <BookOpen className="w-5 h-5" strokeWidth={2} />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (isGuest) {
-              openPaywall('Min utveckling och din personliga kompassöversikt låses upp när du skapar konto eller uppgraderar till FALK Premium.');
-              return;
-            }
-            setActiveView(activeView === 'dashboard' ? 'chat' : 'dashboard');
-          }}
-          title="Min utveckling"
-          aria-label="Min utveckling"
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
-            activeView === 'dashboard'
-              ? 'bg-[#4E5C4B] text-white'
-              : darkMode
-                ? 'hover:bg-[#32302B]'
-                : 'hover:bg-[#E8DCC4]/70'
-          }`}
-        >
-          <TrendingUp className="w-5 h-5" strokeWidth={2} />
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isGuest) {
+                openPaywall('Min utveckling och din personliga kompassöversikt låses upp när du skapar konto eller uppgraderar till FALK Premium.');
+                return;
+              }
+              setActiveView(activeView === 'dashboard' ? 'chat' : 'dashboard');
+            }}
+            title="Min utveckling"
+            aria-label="Min utveckling"
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95 ${
+              activeView === 'dashboard'
+                ? 'bg-[#4E5C4B] text-white'
+                : darkMode
+                  ? 'hover:bg-[#32302B]'
+                  : 'hover:bg-[#E8DCC4]/70'
+            }`}
+          >
+            <TrendingUp className="w-5 h-5" strokeWidth={2} />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (!isPremium) {
-              openPaywall('Insikter och påminnelser från dina samtal ingår i FALK Premium.');
-            } else {
-              setIsRightOpen(true);
-            }
-          }}
-          title="Insikter & Påminnelser"
-          aria-label="Insikter och Påminnelser"
-          className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
-            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
-          }`}
-        >
-          <Lightbulb className="w-5 h-5" strokeWidth={2} />
-          {isPremium && insights.length + reminders.length > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#C57B57]" />
-          )}
-        </button>
-
-        <div className={`w-6 h-px ${darkMode ? 'bg-[#3A3832]' : 'bg-[#DFD4BE]'}`} />
-
-        <button
-          type="button"
-          onClick={toggleMobileDockSide}
-          title={mobileDockSide === 'right' ? 'Flytta ikonrad till vänster' : 'Flytta ikonrad till höger'}
-          aria-label={mobileDockSide === 'right' ? 'Flytta ikonrad till vänster' : 'Flytta ikonrad till höger'}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 opacity-80 hover:opacity-100 ${
-            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
-          }`}
-        >
-          <ArrowLeftRight className="w-4 h-4" strokeWidth={2} />
-        </button>
-      </aside>
+          <button
+            type="button"
+            onClick={() => {
+              if (!isPremium) {
+                openPaywall('Insikter och påminnelser från dina samtal ingår i FALK Premium.');
+              } else {
+                setIsRightOpen(true);
+              }
+            }}
+            title="Insikter & Påminnelser"
+            aria-label="Insikter och Påminnelser"
+            className={`relative w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95 ${
+              darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+            }`}
+          >
+            <Lightbulb className="w-5 h-5" strokeWidth={2} />
+            {isPremium && insights.length + reminders.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#C57B57]" />
+            )}
+          </button>
+        </div>
+      </nav>
 
       {/* FAST BOTTENPANEL: 5 FOKUSREGLAGE + SKRIVFÄLT */}
       <footer
@@ -1626,7 +1614,7 @@ export default function FalkHomePage() {
                 isListening ? 'Stoppa röstinmatning' : 'Tala in meddelande'
               }
               aria-label="Mikrofon"
-              className={`p-2 rounded-xl transition ${
+              className={`shrink-0 p-1.5 sm:p-2 rounded-xl transition ${
                 isListening
                   ? 'bg-[#C57B57] text-white animate-pulse'
                   : darkMode
@@ -1647,7 +1635,7 @@ export default function FalkHomePage() {
               onClick={() => setIsFocusOpen((prev) => !prev)}
               title="Fokusreglage (0–100%)"
               aria-label="Fokusreglage"
-              className={`relative p-2 rounded-xl transition ${
+              className={`relative shrink-0 p-1.5 sm:p-2 rounded-xl transition ${
                 isFocusOpen || activeFocusCount > 0
                   ? 'bg-[#A8BFA1]/35 text-[#4E5C4B]'
                   : darkMode
@@ -1668,16 +1656,18 @@ export default function FalkHomePage() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Dela dina tankar eller ditt dilemma med Falk..."
-              className="flex-1 bg-transparent text-sm sm:text-base outline-none px-1"
+              className="flex-1 min-w-0 w-full bg-transparent text-sm sm:text-base outline-none px-1"
             />
 
             <button
               type="submit"
               disabled={!inputText.trim() || isSending}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#C57B57] hover:bg-[#B46B48] disabled:opacity-45 text-white text-sm font-medium transition"
+              aria-label="Skicka"
+              title="Skicka"
+              className="shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 p-2 sm:px-4 sm:py-2 rounded-xl bg-[#C57B57] hover:bg-[#B46B48] disabled:opacity-45 text-white text-sm font-medium transition"
             >
               <Send className="w-4 h-4" />
-              <span>Skicka</span>
+              <span className="hidden sm:inline">Skicka</span>
             </button>
           </form>
 
