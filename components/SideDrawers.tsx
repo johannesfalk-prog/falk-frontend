@@ -68,6 +68,7 @@ interface SideDrawersProps {
   onNewChat: () => void;
   onTogglePinConversation: (id: string, nextPinned: boolean) => void;
   onDeleteConversation: (id: string) => void;
+  onDeleteConversations?: (ids: string[]) => void;
   onExportSessionPdf: (id: string) => void;
   onOpenAuth: () => void;
   onLogout: () => void;
@@ -136,6 +137,7 @@ export default function SideDrawers({
   onNewChat,
   onTogglePinConversation,
   onDeleteConversation,
+  onDeleteConversations,
   onExportSessionPdf,
   onOpenAuth,
   onLogout,
@@ -150,6 +152,8 @@ export default function SideDrawers({
 }: SideDrawersProps) {
   const [sortNewestFirst, setSortNewestFirst] = useState(true);
   const [openMenuConvId, setOpenMenuConvId] = useState<string | null>(null);
+  const [isSelectingSessions, setIsSelectingSessions] = useState(false);
+  const [selectedConvIds, setSelectedConvIds] = useState<string[]>([]);
   const [rightFilter, setRightFilter] = useState<'all' | 'insights' | 'reminders'>('all');
 
   const sortedConversations = useMemo(() => {
@@ -200,6 +204,8 @@ export default function SideDrawers({
             className="fixed inset-0 bg-black/40 backdrop-blur-[1px]"
             onClick={() => {
               setOpenMenuConvId(null);
+              setIsSelectingSessions(false);
+              setSelectedConvIds([]);
               onCloseLeft();
             }}
           />
@@ -282,6 +288,26 @@ export default function SideDrawers({
                   Sessioner ({sortedConversations.length})
                 </span>
                 <div className="flex items-center gap-1">
+                  {sortedConversations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuConvId(null);
+                        setIsSelectingSessions((prev) => {
+                          if (prev) setSelectedConvIds([]);
+                          return !prev;
+                        });
+                      }}
+                      title={isSelectingSessions ? 'Avsluta markering' : 'Markera flera eller radera alla sessioner'}
+                      className={`rounded-lg px-2 py-1 text-xs font-medium transition ${
+                        isSelectingSessions
+                          ? 'bg-[#C57B57] text-white'
+                          : 'hover:bg-black/10'
+                      }`}
+                    >
+                      {isSelectingSessions ? 'Klar' : 'Välj'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setSortNewestFirst((prev) => !prev)}
@@ -306,6 +332,81 @@ export default function SideDrawers({
                 </div>
               </div>
 
+              {isSelectingSessions && sortedConversations.length > 0 && (
+                <div className={`mb-2 flex flex-wrap items-center justify-between gap-1.5 rounded-xl border px-2.5 py-2 text-xs ${cardSurface}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedConvIds.length === sortedConversations.length) {
+                        setSelectedConvIds([]);
+                      } else {
+                        setSelectedConvIds(sortedConversations.map((c) => c.id));
+                      }
+                    }}
+                    className="font-medium underline-offset-2 hover:underline"
+                  >
+                    {selectedConvIds.length === sortedConversations.length
+                      ? 'Avmarkera alla'
+                      : 'Markera alla'}
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {selectedConvIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (
+                            !window.confirm(
+                              `Vill du radera ${selectedConvIds.length} markerade sessioner permanent?`
+                            )
+                          ) {
+                            return;
+                          }
+                          const idsToRemove = [...selectedConvIds];
+                          setSelectedConvIds([]);
+                          setIsSelectingSessions(false);
+                          if (onDeleteConversations) {
+                            await onDeleteConversations(idsToRemove);
+                          } else {
+                            for (const id of idsToRemove) {
+                              await onDeleteConversation(id);
+                            }
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>Radera ({selectedConvIds.length})</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Vill du radera alla ${sortedConversations.length} sessioner permanent? Dina insikter, mål och din kompass påverkas inte.`
+                          )
+                        ) {
+                          return;
+                        }
+                        const allIds = sortedConversations.map((c) => c.id);
+                        setSelectedConvIds([]);
+                        setIsSelectingSessions(false);
+                        if (onDeleteConversations) {
+                          await onDeleteConversations(allIds);
+                        } else {
+                          for (const id of allIds) {
+                            await onDeleteConversation(id);
+                          }
+                        }
+                      }}
+                      className="rounded-lg border border-red-600/40 px-2 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-500/10"
+                    >
+                      Radera alla
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
                 {sortedConversations.length === 0 ? (
                   <p className={`rounded-xl border border-dashed border-black/15 p-3 text-xs ${mutedText}`}>
@@ -325,10 +426,34 @@ export default function SideDrawers({
                             : `${cardSurface} hover:border-[#C57B57]/60`
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1 px-3 py-2">
+                        <div className="flex items-center justify-between gap-1.5 px-3 py-2">
+                          {isSelectingSessions && (
+                            <input
+                              type="checkbox"
+                              aria-label={`Markera session ${conv.title || 'Kompasssamtal'}`}
+                              checked={selectedConvIds.includes(conv.id)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSelectedConvIds((prev) =>
+                                  checked
+                                    ? Array.from(new Set([...prev, conv.id]))
+                                    : prev.filter((item) => item !== conv.id)
+                                );
+                              }}
+                              className="h-4 w-4 shrink-0 cursor-pointer accent-[#4E5C4B]"
+                            />
+                          )}
                           <button
                             type="button"
                             onClick={() => {
+                              if (isSelectingSessions) {
+                                setSelectedConvIds((prev) =>
+                                  prev.includes(conv.id)
+                                    ? prev.filter((item) => item !== conv.id)
+                                    : [...prev, conv.id]
+                                );
+                                return;
+                              }
                               setOpenMenuConvId(null);
                               onSelectConversation(conv.id);
                               onCloseLeft();

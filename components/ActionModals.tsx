@@ -21,7 +21,7 @@ import {
   AlertTriangle,
   User,
 } from 'lucide-react';
-import { supabase, getAuthHeaders } from '@/lib/supabase';
+import { supabase, getAuthHeaders, setSessionPersistence } from '@/lib/supabase';
 import { DEVELOPMENT_AREAS } from '@/lib/types';
 
 export type ActiveModalType =
@@ -91,6 +91,7 @@ export default function ActionModals({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showLegalDoc, setShowLegalDoc] = useState<'terms' | 'privacy' | null>(null);
   const [promoCode, setPromoCode] = useState('');
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
 
   // Feedback state
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -126,6 +127,7 @@ export default function ActionModals({
     if (activeModal === 'paywall' || activeModal === 'auth') {
       setAuthMode(activeModal === 'auth' ? 'login' : 'register');
       setShowLegalDoc(null);
+      setKeepLoggedIn(false);
     }
     if (activeModal === 'feedback') {
       setFeedbackComment('');
@@ -273,6 +275,7 @@ export default function ActionModals({
     }
 
     setLoading(true);
+    setSessionPersistence(keepLoggedIn);
     try {
       if (authMode === 'login') {
         const { data: signInData, error } = await supabase.auth.signInWithPassword({
@@ -396,6 +399,7 @@ export default function ActionModals({
         }
       }
     } catch (err: unknown) {
+      setSessionPersistence(false);
       setErrorMsg(err instanceof Error ? err.message : 'Autentisering misslyckades.');
     } finally {
       setLoading(false);
@@ -822,6 +826,16 @@ export default function ActionModals({
                     />
                   </div>
 
+                  <label className="flex items-start gap-2 pt-0.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={keepLoggedIn}
+                      onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                      className="mt-0.5 rounded border-[#4E5C4B]"
+                    />
+                    <span>Håll mig inloggad (upp till 2 dagar)</span>
+                  </label>
+
                   {authMode === 'register' && (
                     <div className="space-y-2 pt-1 text-xs">
                       <label className="flex items-start gap-2 cursor-pointer">
@@ -944,6 +958,16 @@ export default function ActionModals({
                 </form>
               </>
             )}
+
+            <p className={`pt-2 text-center text-xs ${subText}`}>
+              Behöver du hjälp?{' '}
+              <a
+                href="mailto:support@wayjs.com"
+                className="font-medium underline underline-offset-2 hover:opacity-80"
+              >
+                Kontakta support (support@wayjs.com)
+              </a>
+            </p>
           </div>
         )}
 

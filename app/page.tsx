@@ -128,6 +128,63 @@ export default function FalkHomePage() {
   // Insikter & Påminnelser (Höger meny)
   const [insights, setInsights] = useState<DrawerInsight[]>([]);
   const [reminders, setReminders] = useState<DrawerReminder[]>([]);
+  const [seenRightDrawerKeys, setSeenRightDrawerKeys] = useState<string[]>([]);
+
+  const getRightDrawerItemKeys = useCallback(() => {
+    const insightKeys = insights.map(
+      (item, idx) => `insight:${String((item as { id?: string | number }).id ?? idx)}`
+    );
+    const reminderKeys = reminders.map(
+      (item, idx) => `reminder:${String((item as { id?: string | number }).id ?? idx)}`
+    );
+    return [...insightKeys, ...reminderKeys];
+  }, [insights, reminders]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storageKey = userId ? `falk_seen_right_drawer_${userId}` : 'falk_seen_right_drawer';
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setSeenRightDrawerKeys(parsed.map(String));
+          return;
+        }
+      }
+    } catch {
+      // Ignorera trasig localStorage-data
+    }
+    setSeenRightDrawerKeys([]);
+  }, [userId]);
+
+  const markRightDrawerItemsSeen = useCallback(() => {
+    const currentKeys = getRightDrawerItemKeys();
+    if (currentKeys.length === 0) return;
+    setSeenRightDrawerKeys((prev) => {
+      const merged = Array.from(new Set([...prev, ...currentKeys]));
+      if (merged.length === prev.length) return prev;
+      if (typeof window !== 'undefined') {
+        const storageKey = userId ? `falk_seen_right_drawer_${userId}` : 'falk_seen_right_drawer';
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(merged));
+        } catch {
+          // Ignorera storage-fel
+        }
+      }
+      return merged;
+    });
+  }, [getRightDrawerItemKeys, userId]);
+
+  useEffect(() => {
+    if (isRightOpen) {
+      markRightDrawerItemsSeen();
+    }
+  }, [isRightOpen, markRightDrawerItemsSeen]);
+
+  const hasUnreadRightDrawerItems =
+    isPremium &&
+    getRightDrawerItemKeys().some((key) => !seenRightDrawerKeys.includes(key));
 
   // Fokusreglage (0-100%, default 0% = Standard FALK)
   const [focusSliders, setFocusSliders] = useState<FocusSliders>(DEFAULT_FOCUS);
@@ -455,6 +512,18 @@ export default function FalkHomePage() {
     await supabase.from('messages').delete().eq('conversation_id', id);
     await supabase.from('conversations').delete().eq('id', id);
     if (activeConversationId === id) {
+      handleNewChat();
+    }
+    await loadUserData();
+  };
+
+  // Radera flera eller alla sessioner
+  const handleDeleteConversations = async (ids: string[]) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
+    if (uniqueIds.length === 0) return;
+    await supabase.from('messages').delete().in('conversation_id', uniqueIds);
+    await supabase.from('conversations').delete().in('id', uniqueIds);
+    if (activeConversationId && uniqueIds.includes(activeConversationId)) {
       handleNewChat();
     }
     await loadUserData();
@@ -909,7 +978,7 @@ export default function FalkHomePage() {
         <button
           type="button"
           onClick={handleNewChat}
-          className="text-xl sm:text-2xl font-bold tracking-[0.22em] uppercase select-none"
+          className="absolute left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-bold tracking-[0.22em] uppercase select-none"
         >
           FALK
         </button>
@@ -936,6 +1005,7 @@ export default function FalkHomePage() {
                   'Insikter och påminnelser från dina samtal ingår i FALK Premium.'
                 );
               } else {
+                markRightDrawerItemsSeen();
                 setIsRightOpen(true);
               }
             }}
@@ -946,7 +1016,7 @@ export default function FalkHomePage() {
             }`}
           >
             <Lightbulb className="w-6 h-6" strokeWidth={2} />
-            {isPremium && insights.length + reminders.length > 0 && (
+            {hasUnreadRightDrawerItems && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#C57B57]" />
             )}
           </button>
@@ -981,7 +1051,7 @@ export default function FalkHomePage() {
                 </div>
 
                 <h1 className="text-lg sm:text-xl font-bold mb-2">
-                  Välkommen till The Human Navigation System™
+                  Kompassen
                 </h1>
 
                 <p
@@ -1511,6 +1581,7 @@ export default function FalkHomePage() {
               if (!isPremium) {
                 openPaywall('Insikter och påminnelser från dina samtal ingår i FALK Premium.');
               } else {
+                markRightDrawerItemsSeen();
                 setIsRightOpen(true);
               }
             }}
@@ -1521,7 +1592,7 @@ export default function FalkHomePage() {
             }`}
           >
             <Lightbulb className="w-5 h-5" strokeWidth={2} />
-            {isPremium && insights.length + reminders.length > 0 && (
+            {hasUnreadRightDrawerItems && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#C57B57]" />
             )}
           </button>
@@ -1694,6 +1765,7 @@ export default function FalkHomePage() {
         onNewChat={handleNewChat}
         onTogglePinConversation={handleTogglePinConversation}
         onDeleteConversation={handleDeleteConversation}
+        onDeleteConversations={handleDeleteConversations}
         onExportSessionPdf={handleExportSessionPdf}
         onOpenAuth={() => setActiveModal('auth')}
         onLogout={async () => {
