@@ -25,6 +25,8 @@ import {
   ChevronRight,
   Sparkles,
   BookOpen,
+  TrendingUp,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { supabase, getAuthHeaders } from '../lib/supabase';
 import {
@@ -79,6 +81,7 @@ export default function FalkHomePage() {
   const [isLeftOpen, setIsLeftOpen] = useState(false);
   const [isRightOpen, setIsRightOpen] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(true);
+  const [mobileDockSide, setMobileDockSide] = useState<'right' | 'left'>('right');
 
   // Auth & användarprofil
   const [userId, setUserId] = useState<string | null>(null);
@@ -145,8 +148,20 @@ export default function FalkHomePage() {
     setActiveModal('paywall');
   }, []);
 
+  const toggleMobileDockSide = () => {
+    setMobileDockSide((prev) => {
+      const next = prev === 'right' ? 'left' : 'right';
+      localStorage.setItem('falk_mobile_dock_side', next);
+      return next;
+    });
+  };
+
   // Initiera tema, guestUuid och lokal kalibrering
   useEffect(() => {
+    const savedDockSide = localStorage.getItem('falk_mobile_dock_side');
+    if (savedDockSide === 'left' || savedDockSide === 'right') {
+      setMobileDockSide(savedDockSide);
+    }
     const savedTheme = localStorage.getItem('falk_dark_mode');
     if (savedTheme === 'true') setDarkMode(true);
     setGuestUuid(getOrCreateGuestUuid());
@@ -878,7 +893,7 @@ export default function FalkHomePage() {
 
   return (
     <div
-      className={`min-h-screen flex flex-col transition-colors ${
+      className={`min-h-[100dvh] flex flex-col transition-colors ${
         darkMode
           ? 'bg-[#181715] text-[#F5EFE6]'
           : 'bg-[#E8DCC4] text-[#1C1C1C]'
@@ -886,7 +901,7 @@ export default function FalkHomePage() {
     >
       {/* HEADER */}
       <header
-        className={`sticky top-0 z-30 border-b px-4 sm:px-6 h-16 flex items-center justify-between ${
+        className={`sticky top-0 z-30 border-b px-4 sm:px-6 pt-[env(safe-area-inset-top,0px)] h-[calc(4rem+env(safe-area-inset-top,0px))] flex items-center justify-between ${
           darkMode
             ? 'bg-[#181715]/95 border-[#32302B] text-[#F5EFE6]'
             : 'bg-[#E8DCC4]/95 border-[#D5C7AC] text-[#111111]'
@@ -953,7 +968,11 @@ export default function FalkHomePage() {
       </header>
 
       {/* HUVUDINNEHÅLL */}
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-6 pb-36 flex flex-col">
+      <main
+        className={`flex-1 w-full max-w-3xl mx-auto pt-6 pb-40 md:px-4 flex flex-col ${
+          mobileDockSide === 'right' ? 'pl-4 pr-14' : 'pl-14 pr-4'
+        }`}
+      >
         {activeView === 'chat' && (
           <>
             {/* VÄLKOMSTKORT + KOMPASSKALIBRERING */}
@@ -1403,9 +1422,127 @@ export default function FalkHomePage() {
         )}
       </main>
 
+      {/* MOBIL ENHANDS-IKONRAD (TIKTOK-STIL MED HÖGER/VÄNSTER-VAL) */}
+      <aside
+        aria-label="Snabbmeny mobil"
+        className={`fixed z-20 md:hidden bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] flex flex-col items-center gap-2 p-1.5 rounded-2xl border shadow-md backdrop-blur-md transition-all ${
+          mobileDockSide === 'right' ? 'right-2' : 'left-2'
+        } ${
+          darkMode
+            ? 'bg-[#23221F]/90 border-[#3A3832] text-[#F5EFE6]'
+            : 'bg-[#FAF7F0]/90 border-[#D5C7AC] text-[#1C1C1C]'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={handleNewChat}
+          title="Ny chatt"
+          aria-label="Ny chatt"
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
+            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+          }`}
+        >
+          <Plus className="w-5 h-5" strokeWidth={2.1} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setCalibrationView('wizard');
+            setIsCalibrationOpen(true);
+          }}
+          title="Kompasskalibrering"
+          aria-label="Kompasskalibrering"
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
+            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+          }`}
+        >
+          <Compass className="w-5 h-5" strokeWidth={2} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (isGuest) {
+              openPaywall('Biblioteket med 15 guidade övningar låses upp när du skapar konto eller uppgraderar till FALK Premium.');
+              return;
+            }
+            setActiveView(activeView === 'library' ? 'chat' : 'library');
+          }}
+          title="Bibliotek"
+          aria-label="Bibliotek"
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
+            activeView === 'library'
+              ? 'bg-[#4E5C4B] text-white'
+              : darkMode
+                ? 'hover:bg-[#32302B]'
+                : 'hover:bg-[#E8DCC4]/70'
+          }`}
+        >
+          <BookOpen className="w-5 h-5" strokeWidth={2} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (isGuest) {
+              openPaywall('Min utveckling och din personliga kompassöversikt låses upp när du skapar konto eller uppgraderar till FALK Premium.');
+              return;
+            }
+            setActiveView(activeView === 'dashboard' ? 'chat' : 'dashboard');
+          }}
+          title="Min utveckling"
+          aria-label="Min utveckling"
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
+            activeView === 'dashboard'
+              ? 'bg-[#4E5C4B] text-white'
+              : darkMode
+                ? 'hover:bg-[#32302B]'
+                : 'hover:bg-[#E8DCC4]/70'
+          }`}
+        >
+          <TrendingUp className="w-5 h-5" strokeWidth={2} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!isPremium) {
+              openPaywall('Insikter och påminnelser från dina samtal ingår i FALK Premium.');
+            } else {
+              setIsRightOpen(true);
+            }
+          }}
+          title="Insikter & Påminnelser"
+          aria-label="Insikter och Påminnelser"
+          className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 ${
+            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+          }`}
+        >
+          <Lightbulb className="w-5 h-5" strokeWidth={2} />
+          {isPremium && insights.length + reminders.length > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#C57B57]" />
+          )}
+        </button>
+
+        <div className={`w-6 h-px ${darkMode ? 'bg-[#3A3832]' : 'bg-[#DFD4BE]'}`} />
+
+        <button
+          type="button"
+          onClick={toggleMobileDockSide}
+          title={mobileDockSide === 'right' ? 'Flytta ikonrad till vänster' : 'Flytta ikonrad till höger'}
+          aria-label={mobileDockSide === 'right' ? 'Flytta ikonrad till vänster' : 'Flytta ikonrad till höger'}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition active:scale-95 opacity-80 hover:opacity-100 ${
+            darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+          }`}
+        >
+          <ArrowLeftRight className="w-4 h-4" strokeWidth={2} />
+        </button>
+      </aside>
+
       {/* FAST BOTTENPANEL: 5 FOKUSREGLAGE + SKRIVFÄLT */}
       <footer
-        className={`fixed bottom-0 inset-x-0 z-20 px-4 pt-2 pb-3 ${
+        className={`fixed bottom-0 inset-x-0 z-20 px-4 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] ${
           darkMode
             ? 'bg-gradient-to-t from-[#181715] via-[#181715]/95 to-transparent'
             : 'bg-gradient-to-t from-[#E8DCC4] via-[#E8DCC4]/95 to-transparent'
