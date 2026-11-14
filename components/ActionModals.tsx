@@ -215,6 +215,7 @@ export default function ActionModals({
       }
       setPromoCode('');
       try {
+        window.localStorage.removeItem('falk_pending_promo');
         window.sessionStorage.removeItem('falk_pending_promo');
       } catch {}
       setSuccessMsg(data.message || 'Premium har aktiverats!');
@@ -290,7 +291,7 @@ export default function ActionModals({
               ? new Date().toISOString()
               : null;
           if (adultOk && termsAt) {
-            await supabase.from('user_profiles').upsert(
+            const { error: profileSyncError } = await supabase.from('user_profiles').upsert(
               {
                 id: signInData.user.id,
                 user_id: signInData.user.id,
@@ -305,6 +306,9 @@ export default function ActionModals({
               },
               { onConflict: 'id' }
             );
+            if (profileSyncError) {
+              console.error('Kunde inte synka användarprofil vid inloggning:', profileSyncError);
+            }
           }
         }
 
@@ -313,7 +317,11 @@ export default function ActionModals({
         let pendingPromo = promoCode.trim();
         if (!pendingPromo) {
           try {
-            pendingPromo = (window.sessionStorage.getItem('falk_pending_promo') || '').trim();
+            pendingPromo = (
+              window.localStorage.getItem('falk_pending_promo') ||
+              window.sessionStorage.getItem('falk_pending_promo') ||
+              ''
+            ).trim();
           } catch {}
         }
 
@@ -330,6 +338,7 @@ export default function ActionModals({
           email: emailInput.trim(),
           password: passwordInput,
           options: {
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
             data: {
               display_name: nameInput.trim() || emailInput.split('@')[0],
               is_adult_confirmed: true,
@@ -341,7 +350,7 @@ export default function ActionModals({
         if (error) throw error;
 
         if (signUpData.user && signUpData.session) {
-          await supabase.from('user_profiles').upsert(
+          const { error: signUpProfileError } = await supabase.from('user_profiles').upsert(
             {
               id: signUpData.user.id,
               user_id: signUpData.user.id,
@@ -353,13 +362,16 @@ export default function ActionModals({
             },
             { onConflict: 'id' }
           );
+          if (signUpProfileError) {
+            console.error('Kunde inte skapa användarprofil vid registrering:', signUpProfileError);
+          }
         }
 
         if (!signUpData.session) {
           const trimmedPromo = promoCode.trim();
           if (trimmedPromo) {
             try {
-              window.sessionStorage.setItem('falk_pending_promo', trimmedPromo);
+              window.localStorage.setItem('falk_pending_promo', trimmedPromo);
             } catch {}
           }
           setAuthMode('login');

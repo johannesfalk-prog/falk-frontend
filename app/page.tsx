@@ -237,13 +237,90 @@ export default function FalkHomePage() {
       .eq('user_id', user.id)
       .maybeSingle();
 
+    let effectiveIsPremium = false;
+
     if (profile) {
       setDisplayName(profile.display_name || user.email?.split('@')[0] || '');
       if (profile.email) setUserEmail(profile.email);
-      setIsPremium(Boolean(profile.is_premium));
+      effectiveIsPremium = Boolean(profile.is_premium);
+      setIsPremium(effectiveIsPremium);
     } else {
-      setDisplayName(user.email?.split('@')[0] || '');
+      const meta = (user.user_metadata || {}) as Record<string, unknown>;
+      const fallbackName =
+        (typeof meta.display_name === 'string' && meta.display_name.trim()) ||
+        user.email?.split('@')[0] ||
+        '';
+      const adultConfirmed = Boolean(meta.is_adult_confirmed || meta.age_verified_18_plus);
+      const termsAt =
+        typeof meta.terms_accepted_at === 'string'
+          ? meta.terms_accepted_at
+          : meta.terms_accepted
+          ? new Date().toISOString()
+          : null;
+      const privacyAt =
+        typeof meta.privacy_accepted_at === 'string' ? meta.privacy_accepted_at : termsAt;
+
+      setDisplayName(fallbackName);
       setIsPremium(false);
+
+      const { error: healError } = await supabase.from('user_profiles').upsert(
+        {
+          id: user.id,
+          user_id: user.id,
+          email: user.email || null,
+          display_name: fallbackName,
+          is_adult_confirmed: adultConfirmed,
+          terms_accepted_at: termsAt,
+          privacy_accepted_at: privacyAt,
+        },
+        { onConflict: 'id' }
+      );
+      if (healError) {
+        console.error('Kunde inte självläka användarprofil:', healError);
+      }
+    }
+
+    // Automatisk inlösen av väntande rabattkod efter e-postaktivering
+    let pendingPromo = '';
+    try {
+      pendingPromo = (
+        window.localStorage.getItem('falk_pending_promo') ||
+        window.sessionStorage.getItem('falk_pending_promo') ||
+        ''
+      ).trim();
+    } catch {}
+
+    if (pendingPromo) {
+      if (effectiveIsPremium) {
+        try {
+          window.localStorage.removeItem('falk_pending_promo');
+          window.sessionStorage.removeItem('falk_pending_promo');
+        } catch {}
+      } else {
+        try {
+          const headers = await getAuthHeaders();
+          const redeemRes = await fetch(`${backendUrl}/api/promo/redeem`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ code: pendingPromo }),
+          });
+          const redeemJson = await redeemRes.json().catch(() => ({}));
+          if (redeemRes.ok && redeemJson?.ok) {
+            setIsPremium(true);
+            try {
+              window.localStorage.removeItem('falk_pending_promo');
+              window.sessionStorage.removeItem('falk_pending_promo');
+            } catch {}
+          } else if (redeemRes.status === 400 || redeemRes.status === 409) {
+            try {
+              window.localStorage.removeItem('falk_pending_promo');
+              window.sessionStorage.removeItem('falk_pending_promo');
+            } catch {}
+          }
+        } catch {
+          // Behåll koden vid tillfälligt nätverksfel för nytt försök vid nästa synk
+        }
+      }
     }
 
     // Hämta konversationer
