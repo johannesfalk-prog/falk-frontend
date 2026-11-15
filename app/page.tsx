@@ -452,6 +452,7 @@ export default function FalkHomePage() {
   // Välj befintlig konversation från vänstermenyn
   const handleSelectConversation = async (convId: string) => {
     setActiveConversationId(convId);
+    setMessages([]);
     setActiveView('chat');
     setIsLeftOpen(false);
     setShowWelcomeCard(false);
@@ -1028,7 +1029,7 @@ export default function FalkHomePage() {
         {activeView === 'chat' && (
           <>
             {/* VÄLKOMSTKORT + KOMPASSKALIBRERING */}
-            {showWelcomeCard && messages.length === 0 && (
+            {!activeConversationId && showWelcomeCard && messages.length === 0 && (
               <section
                 className={`relative rounded-2xl p-6 sm:p-7 mb-6 border shadow-sm ${
                   darkMode
@@ -1095,7 +1096,7 @@ export default function FalkHomePage() {
             )}
 
             {/* 9 ONBOARDINGKORT (VISAS INNAN FÖRSTA MEDDELANDET) */}
-            {messages.length === 0 && (
+            {!activeConversationId && messages.length === 0 && (
               <section className="space-y-2.5 mb-6">
                 {ONBOARDING_CARDS.map((card) => (
                   <button
@@ -1209,7 +1210,7 @@ export default function FalkHomePage() {
                     </div>
 
                     {/* DE 9 SVARSIKONERNA UNDER VARJE FALK-MEDDELANDE */}
-                    <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-1.5 pb-1 ml-0.5">
+                    <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto max-w-full mt-2.5 pt-1.5 pb-1 ml-0.5">
                       {/* Kluster 1: 4 öppna interaktionsikoner */}
                       <div
                         className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border ${

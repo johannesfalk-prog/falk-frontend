@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   X,
   MessageSquare,
@@ -152,6 +152,18 @@ export default function SideDrawers({
 }: SideDrawersProps) {
   const [sortNewestFirst, setSortNewestFirst] = useState(true);
   const [openMenuConvId, setOpenMenuConvId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMenuConvId) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('[data-session-menu]')) {
+        setOpenMenuConvId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [openMenuConvId]);
   const [isSelectingSessions, setIsSelectingSessions] = useState(false);
   const [selectedConvIds, setSelectedConvIds] = useState<string[]>([]);
   const [rightFilter, setRightFilter] = useState<'all' | 'insights' | 'reminders'>('all');
@@ -420,6 +432,7 @@ export default function SideDrawers({
                     return (
                       <div
                         key={conv.id}
+                        data-session-menu
                         className={`relative rounded-xl border transition ${
                           isSelected
                             ? 'border-[#4E5C4B] bg-[#A8BFA1]/35'
