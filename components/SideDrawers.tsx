@@ -78,7 +78,7 @@ interface SideDrawersProps {
   reminders: DrawerReminder[];
   onDeleteInsight: (id: string) => void;
   onDeleteReminder: (id: string) => void;
-  onOpenCreateReminder: () => void;
+  onOpenCreateReminder: (initialContent?: string) => void;
   onJumpToSession?: (sessionId: string) => void;
 }
 
@@ -622,7 +622,7 @@ export default function SideDrawers({
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={onOpenCreateReminder}
+                  onClick={() => onOpenCreateReminder()}
                   title="Skapa ny påminnelse"
                   aria-label="Skapa ny påminnelse"
                   className="inline-flex items-center gap-1 rounded-lg bg-[#4E5C4B] px-2.5 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
@@ -707,6 +707,15 @@ export default function SideDrawers({
                         )}
                         <button
                           type="button"
+                          onClick={() => onOpenCreateReminder(item.content)}
+                          title="Skapa påminnelse av insikt"
+                          aria-label="Skapa påminnelse av insikt"
+                          className="rounded-lg p-1 text-[#4E5C4B] transition hover:bg-black/10"
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => onDeleteInsight(item.id)}
                           title="Radera insikt"
                           aria-label="Radera insikt"
@@ -719,11 +728,6 @@ export default function SideDrawers({
 
                     <p className="text-sm leading-relaxed">{item.content}</p>
 
-                    {item.source_context && (
-                      <p className={`mt-2 border-l-2 border-[#C57B57] pl-2.5 text-xs italic ${mutedText}`}>
-                        &ldquo;{item.source_context}&rdquo;
-                      </p>
-                    )}
 
                     {item.created_at && (
                       <span className={`mt-2 block text-[11px] ${mutedText}`}>

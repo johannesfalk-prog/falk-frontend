@@ -457,25 +457,37 @@ export default function FalkHomePage() {
     setIsLeftOpen(false);
     setShowWelcomeCard(false);
 
-    const { data: msgRows } = await supabase
+    const { data: msgRows, error } = await supabase
       .from('messages')
-      .select('id, sender, content, created_at')
+      .select('*')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true });
 
+    if (error) {
+      console.error('Kunde inte ladda meddelanden för session:', error);
+      return;
+    }
+
     if (msgRows) {
-      const mapped: Message[] = msgRows.map((m) => ({
-        id: m.id,
-        sender: m.sender === 'user' ? 'user' : 'falk',
-        content: m.content,
-        timestamp: m.created_at,
-        variants:
-          m.sender !== 'user'
-            ? [{ content: m.content, mode: 'default' }]
-            : undefined,
-        activeVariantIndex: 0,
-        feedback: null,
-      }));
+      const mapped: Message[] = msgRows.map((m: any) => {
+        const rawRole = m.role ?? m.sender;
+        const isUser = rawRole === 'user';
+        const parsedVariants =
+          !isUser && Array.isArray(m.variants) && m.variants.length > 0
+            ? m.variants
+            : !isUser
+              ? [{ content: m.content, mode: 'default' }]
+              : undefined;
+        return {
+          id: m.id,
+          sender: isUser ? 'user' : 'falk',
+          content: m.content,
+          timestamp: m.created_at,
+          variants: parsedVariants,
+          activeVariantIndex: 0,
+          feedback: null,
+        };
+      });
       setMessages(mapped);
     }
   };
@@ -510,20 +522,40 @@ export default function FalkHomePage() {
 
   // Radera session
   const handleDeleteConversation = async (id: string) => {
-    await supabase.from('messages').delete().eq('conversation_id', id);
-    await supabase.from('conversations').delete().eq('id', id);
-    if (activeConversationId === id) {
-      handleNewChat();
-    }
-    await loadUserData();
+    await handleDeleteConversations([id]);
   };
 
   // Radera flera eller alla sessioner
   const handleDeleteConversations = async (ids: string[]) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
     if (uniqueIds.length === 0) return;
-    await supabase.from('messages').delete().in('conversation_id', uniqueIds);
-    await supabase.from('conversations').delete().in('id', uniqueIds);
+
+    const { data: msgRows } = await supabase
+      .from('messages')
+      .select('id')
+      .in('conversation_id', uniqueIds);
+    const msgIds = (msgRows || []).map((r: any) => r.id).filter(Boolean);
+    if (msgIds.length > 0) {
+      await supabase.from('message_feedback').delete().in('message_id', msgIds);
+    }
+
+    const { error: msgErr } = await supabase
+      .from('messages')
+      .delete()
+      .in('conversation_id', uniqueIds);
+    if (msgErr) {
+      console.error('Fel vid radering av meddelanden:', msgErr);
+    }
+
+    const { error: convErr } = await supabase
+      .from('conversations')
+      .delete()
+      .in('id', uniqueIds);
+    if (convErr) {
+      console.error('Fel vid radering av konversationer:', convErr);
+      return;
+    }
+
     if (activeConversationId && uniqueIds.includes(activeConversationId)) {
       handleNewChat();
     }
@@ -1210,7 +1242,7 @@ export default function FalkHomePage() {
                     </div>
 
                     {/* DE 9 SVARSIKONERNA UNDER VARJE FALK-MEDDELANDE */}
-                    <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto max-w-full mt-2.5 pt-1.5 pb-1 ml-0.5">
+                    <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto max-w-full mt-2.5 pt-2.5 pb-1 ml-0.5">
                       {/* Kluster 1: 4 öppna interaktionsikoner */}
                       <div
                         className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border ${
@@ -1324,7 +1356,7 @@ export default function FalkHomePage() {
                         >
                           <Plus className="w-4 h-4" />
                           {!isPremium && (
-                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute top-0 -right-0.5" />
                           )}
                         </button>
 
@@ -1347,7 +1379,7 @@ export default function FalkHomePage() {
                         >
                           <Minus className="w-4 h-4" />
                           {!isPremium && (
-                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute top-0 -right-0.5" />
                           )}
                         </button>
 
@@ -1374,7 +1406,7 @@ export default function FalkHomePage() {
                         >
                           <Bell className="w-4 h-4" />
                           {!isPremium && (
-                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute top-0 -right-0.5" />
                           )}
                         </button>
 
@@ -1401,7 +1433,7 @@ export default function FalkHomePage() {
                         >
                           <Pin className="w-4 h-4" />
                           {!isPremium && (
-                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute top-0 -right-0.5" />
                           )}
                         </button>
 
@@ -1426,7 +1458,7 @@ export default function FalkHomePage() {
                         >
                           <Target className="w-4 h-4" />
                           {!isPremium && (
-                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute -top-0.5 -right-0.5" />
+                            <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute top-0 -right-0.5" />
                           )}
                         </button>
                       </div>
