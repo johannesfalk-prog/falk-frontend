@@ -457,18 +457,19 @@ export default function FalkHomePage() {
     setIsLeftOpen(false);
     setShowWelcomeCard(false);
 
-    const { data: msgRows, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: true });
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${backendUrl}/api/conversations/${convId}/messages`, {
+        method: 'GET',
+        headers,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error('Kunde inte ladda meddelanden för session:', data.message || res.status);
+        return;
+      }
 
-    if (error) {
-      console.error('Kunde inte ladda meddelanden för session:', error);
-      return;
-    }
-
-    if (msgRows) {
+      const msgRows = Array.isArray(data.messages) ? data.messages : [];
       const mapped: Message[] = msgRows.map((m: any) => {
         const rawRole = m.role ?? m.sender;
         const isUser = rawRole === 'user';
@@ -479,16 +480,18 @@ export default function FalkHomePage() {
               ? [{ content: m.content, mode: 'default' }]
               : undefined;
         return {
-          id: m.id,
+          id: String(m.id),
           sender: isUser ? 'user' : 'falk',
           content: m.content,
-          timestamp: m.created_at,
+          timestamp: m.created_at || new Date().toISOString(),
           variants: parsedVariants,
           activeVariantIndex: 0,
           feedback: null,
         };
       });
       setMessages(mapped);
+    } catch (err) {
+      console.error('Nätverksfel vid laddning av session:', err);
     }
   };
 
@@ -699,6 +702,7 @@ export default function FalkHomePage() {
       };
 
       setMessages((prev) => [...prev, falkMsg]);
+      setIsSending(false);
 
       if (isGuest) {
         const todayKey = `falk_guest_msg_count_${new Date().toISOString().slice(0, 10)}`;
@@ -1242,10 +1246,10 @@ export default function FalkHomePage() {
                     </div>
 
                     {/* DE 9 SVARSIKONERNA UNDER VARJE FALK-MEDDELANDE */}
-                    <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto max-w-full mt-2.5 pt-2.5 pb-1 ml-0.5">
+                    <div className="flex flex-wrap items-center gap-1.5 max-w-full mt-2.5 pt-3 pb-1.5 ml-0.5">
                       {/* Kluster 1: 4 öppna interaktionsikoner */}
                       <div
-                        className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border ${
+                        className={`inline-flex flex-wrap items-center gap-1 px-1.5 py-1 rounded-xl border ${
                           darkMode
                             ? 'bg-[#23211D]/80 border-[#32302B]'
                             : 'bg-[#F2ECE0]/85 border-[#DCD0B6]'
@@ -1327,16 +1331,8 @@ export default function FalkHomePage() {
                         >
                           <ThumbsDown className="w-4 h-4" />
                         </button>
-                      </div>
 
-                      {/* Kluster 2: 5 Premium-verktyg */}
-                      <div
-                        className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border ${
-                          darkMode
-                            ? 'bg-[#23211D]/80 border-[#32302B]'
-                            : 'bg-[#F2ECE0]/85 border-[#DCD0B6]'
-                        }`}
-                      >
+                        {/* 5 Premium-verktyg */}
                         {/* 5. Plus - Längre/djupare svar (Premium) */}
                         <button
                           type="button"
@@ -1704,7 +1700,7 @@ export default function FalkHomePage() {
               e.preventDefault();
               handleSendMessage();
             }}
-            className={`flex items-center gap-2 rounded-2xl px-3 py-2 border shadow-sm ${
+            className={`flex items-end gap-2 rounded-2xl px-3 py-2 border shadow-sm ${
               darkMode
                 ? 'bg-[#252420] border-[#3A3832]'
                 : 'bg-white border-[#D5C7AC]'
@@ -1755,12 +1751,23 @@ export default function FalkHomePage() {
               )}
             </button>
 
-            <input
-              type="text"
+            <textarea
+              rows={1}
+              ref={(el) => {
+                if (!el) return;
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 176)}px`;
+              }}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               placeholder="Dela dina tankar eller ditt dilemma med Falk..."
-              className="flex-1 min-w-0 w-full bg-transparent text-sm sm:text-base outline-none px-1"
+              className="flex-1 min-w-0 w-full bg-transparent text-sm sm:text-base leading-6 outline-none px-1 py-1 resize-none overflow-y-auto max-h-[176px]"
             />
 
             <button
