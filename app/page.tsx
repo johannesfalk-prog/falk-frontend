@@ -451,47 +451,64 @@ export default function FalkHomePage() {
 
   // Välj befintlig konversation från vänstermenyn
   const handleSelectConversation = async (convId: string) => {
-    setActiveConversationId(convId);
+    const cleanConvId = String(convId || '').trim();
+    if (!cleanConvId) return;
+
+    setActiveConversationId(cleanConvId);
     setMessages([]);
     setActiveView('chat');
     setIsLeftOpen(false);
     setShowWelcomeCard(false);
 
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${backendUrl}/api/conversations/${convId}/messages`, {
-        method: 'GET',
-        headers,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        console.error('Kunde inte ladda meddelanden för session:', data.message || res.status);
+      const { data: msgRows, error } = await supabase
+        .from('messages')
+        .select('id, sender, content, created_at')
+        .eq('conversation_id', cleanConvId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Kunde inte ladda meddelanden från Supabase:', error.message);
+        setMessages([
+          {
+            id: `err-${Date.now()}`,
+            sender: 'falk',
+            content: 'Kunde inte hämta historiken för den här sessionen just nu. Kontrollera behörighet eller försök igen.',
+            timestamp: new Date().toISOString(),
+            variants: [{ content: 'Kunde inte hämta historiken för den här sessionen just nu.', mode: 'default' }],
+            activeVariantIndex: 0,
+            feedback: null,
+          },
+        ]);
         return;
       }
 
-      const msgRows = Array.isArray(data.messages) ? data.messages : [];
-      const mapped: Message[] = msgRows.map((m: any) => {
+      const sortedRows = [...(msgRows || [])].sort((a: any, b: any) => {
+        const tA = a.created_at || '';
+        const tB = b.created_at || '';
+        if (tA !== tB) return tA.localeCompare(tB);
+        const orderA = a.sender === 'user' ? 0 : 1;
+        const orderB = b.sender === 'user' ? 0 : 1;
+        if (orderA !== orderB) return orderA - orderB;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+
+      const mapped: Message[] = sortedRows.map((m: any) => {
         const rawRole = m.role ?? m.sender;
         const isUser = rawRole === 'user';
-        const parsedVariants =
-          !isUser && Array.isArray(m.variants) && m.variants.length > 0
-            ? m.variants
-            : !isUser
-              ? [{ content: m.content, mode: 'default' }]
-              : undefined;
         return {
           id: String(m.id),
           sender: isUser ? 'user' : 'falk',
           content: m.content,
           timestamp: m.created_at || new Date().toISOString(),
-          variants: parsedVariants,
+          variants: !isUser ? [{ content: m.content, mode: 'default' }] : undefined,
           activeVariantIndex: 0,
           feedback: null,
         };
       });
       setMessages(mapped);
     } catch (err) {
-      console.error('Nätverksfel vid laddning av session:', err);
+      console.error('Fel vid laddning av session:', err);
     }
   };
 
