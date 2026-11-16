@@ -1766,7 +1766,7 @@ export default function FalkHomePage() {
                   e.currentTarget.form?.requestSubmit();
                 }
               }}
-              placeholder="Dela dina tankar eller ditt dilemma med Falk..."
+              placeholder="Dela dina tankar med FALK..."
               className="flex-1 min-w-0 w-full bg-transparent text-sm sm:text-base leading-6 outline-none px-1 py-1 resize-none overflow-y-auto max-h-[176px]"
             />
 
