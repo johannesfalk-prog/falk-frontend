@@ -198,8 +198,12 @@ export const ONBOARDING_CARDS = [
 ];
 
 export function computeCompassFromAreas(areaScores: Record<string, number>): Record<string, number> {
+  const safeVal = (key: string) => {
+    const n = Number(areaScores?.[key]);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+  };
   const avg = (a: string, b: string) =>
-    Math.round(((areaScores[a] ?? 50) + (areaScores[b] ?? 50)) / 2);
+    Math.round((safeVal(a) + safeVal(b)) / 2);
 
   return {
     Personlig: avg("Personlig utveckling", "Spiritualitet"),

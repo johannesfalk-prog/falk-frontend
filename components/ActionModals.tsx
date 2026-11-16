@@ -439,6 +439,7 @@ export default function ActionModals({
 
   const handleReminderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!reminderContent.trim()) {
       setErrorMsg('Skriv vad påminnelsen gäller.');
       return;
@@ -490,6 +491,7 @@ export default function ActionModals({
 
   const handleInsightSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!insightContent.trim()) {
       setErrorMsg('Insikten kan inte vara tom.');
       return;

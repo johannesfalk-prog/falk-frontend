@@ -49,25 +49,33 @@ interface DashboardViewProps {
 
 function extractCompassValues(
   scores: Record<string, number> | null
-): Record<'personal' | 'relation' | 'work' | 'life', number> | null {
+): Record<'Personlig' | 'Relation' | 'Arbete' | 'Liv', number> | null {
   if (!scores || typeof scores !== 'object') return null;
 
   const hasAreaKeys = DEVELOPMENT_AREAS.some(
     (a) => typeof scores[a.name] === 'number'
   );
   if (hasAreaKeys) {
-    return computeCompassFromAreas(scores);
+    const computed = computeCompassFromAreas(scores);
+    return {
+      Personlig: Number.isFinite(computed.Personlig) ? computed.Personlig : 0,
+      Relation: Number.isFinite(computed.Relation) ? computed.Relation : 0,
+      Arbete: Number.isFinite(computed.Arbete) ? computed.Arbete : 0,
+      Liv: Number.isFinite(computed.Liv) ? computed.Liv : 0,
+    };
   }
 
-  const hasCompassKeys = COMPASS_FOUR.some(
-    (c) => typeof scores[c.key] === 'number'
-  );
-  if (hasCompassKeys) {
+  const p = scores.Personlig ?? scores.personal;
+  const r = scores.Relation ?? scores.relation;
+  const w = scores.Arbete ?? scores.work;
+  const l = scores.Liv ?? scores.life;
+
+  if ([p, r, w, l].some((v) => typeof v === 'number' && Number.isFinite(v))) {
     return {
-      personal: typeof scores.personal === 'number' ? scores.personal : 0,
-      relation: typeof scores.relation === 'number' ? scores.relation : 0,
-      work: typeof scores.work === 'number' ? scores.work : 0,
-      life: typeof scores.life === 'number' ? scores.life : 0,
+      Personlig: typeof p === 'number' && Number.isFinite(p) ? p : 0,
+      Relation: typeof r === 'number' && Number.isFinite(r) ? r : 0,
+      Arbete: typeof w === 'number' && Number.isFinite(w) ? w : 0,
+      Liv: typeof l === 'number' && Number.isFinite(l) ? l : 0,
     };
   }
 
@@ -177,10 +185,10 @@ export default function DashboardView({
   const averageCompassScore = useMemo(() => {
     if (!compassValues) return null;
     const sum =
-      compassValues.personal +
-      compassValues.relation +
-      compassValues.work +
-      compassValues.life;
+      compassValues.Personlig +
+      compassValues.Relation +
+      compassValues.Arbete +
+      compassValues.Liv;
     return Math.round(sum / 4);
   }, [compassValues]);
 
@@ -189,12 +197,12 @@ export default function DashboardView({
     const chrono = [...calibrations].reverse().slice(-8);
     return chrono.map((snap, idx) => {
       const c = extractCompassValues(snap.scores) || {
-        personal: 0,
-        relation: 0,
-        work: 0,
-        life: 0,
+        Personlig: 0,
+        Relation: 0,
+        Arbete: 0,
+        Liv: 0,
       };
-      const avg = Math.round((c.personal + c.relation + c.work + c.life) / 4);
+      const avg = Math.round((c.Personlig + c.Relation + c.Arbete + c.Liv) / 4);
       return {
         id: snap.id,
         label: formatShortDate(snap.created_at) || `#${idx + 1}`,
@@ -312,25 +320,25 @@ export default function DashboardView({
     const cy = 110;
     const maxR = 76;
     const vals = compassValues || {
-      personal: 0,
-      relation: 0,
-      work: 0,
-      life: 0,
+      Personlig: 0,
+      Relation: 0,
+      Arbete: 0,
+      Liv: 0,
     };
-    const pTop = `${cx},${cy - (vals.personal / 100) * maxR}`;
-    const pRight = `${cx + (vals.relation / 100) * maxR},${cy}`;
-    const pBottom = `${cx},${cy + (vals.work / 100) * maxR}`;
-    const pLeft = `${cx - (vals.life / 100) * maxR},${cy}`;
+    const pTop = `${cx},${cy - ((vals.Personlig ?? 0) / 100) * maxR}`;
+    const pRight = `${cx + ((vals.Relation ?? 0) / 100) * maxR},${cy}`;
+    const pBottom = `${cx},${cy + ((vals.Arbete ?? 0) / 100) * maxR}`;
+    const pLeft = `${cx - ((vals.Liv ?? 0) / 100) * maxR},${cy}`;
     return {
       cx,
       cy,
       maxR,
       polygonPoints: `${pTop} ${pRight} ${pBottom} ${pLeft}`,
       dots: [
-        { x: cx, y: cy - (vals.personal / 100) * maxR },
-        { x: cx + (vals.relation / 100) * maxR, y: cy },
-        { x: cx, y: cy + (vals.work / 100) * maxR },
-        { x: cx - (vals.life / 100) * maxR, y: cy },
+        { x: cx, y: cy - ((vals.Personlig ?? 0) / 100) * maxR },
+        { x: cx + ((vals.Relation ?? 0) / 100) * maxR, y: cy },
+        { x: cx, y: cy + ((vals.Arbete ?? 0) / 100) * maxR },
+        { x: cx - ((vals.Liv ?? 0) / 100) * maxR, y: cy },
       ],
     };
   }, [compassValues]);
@@ -554,7 +562,7 @@ export default function DashboardView({
                 textAnchor="middle"
                 className="text-[10px] font-semibold fill-current"
               >
-                Personlig {compassValues ? `${compassValues.personal}%` : ''}
+                Personlig {compassValues ? `${compassValues.Personlig}%` : ''}
               </text>
               <text
                 x={214}
@@ -562,7 +570,7 @@ export default function DashboardView({
                 textAnchor="end"
                 className="text-[10px] font-semibold fill-current"
               >
-                Relation {compassValues ? `${compassValues.relation}%` : ''}
+                Relation {compassValues ? `${compassValues.Relation}%` : ''}
               </text>
               <text
                 x={radarGeometry.cx}
@@ -570,7 +578,7 @@ export default function DashboardView({
                 textAnchor="middle"
                 className="text-[10px] font-semibold fill-current"
               >
-                Arbete {compassValues ? `${compassValues.work}%` : ''}
+                Arbete {compassValues ? `${compassValues.Arbete}%` : ''}
               </text>
               <text
                 x={6}
@@ -578,7 +586,7 @@ export default function DashboardView({
                 textAnchor="start"
                 className="text-[10px] font-semibold fill-current"
               >
-                Liv {compassValues ? `${compassValues.life}%` : ''}
+                Liv {compassValues ? `${compassValues.Liv}%` : ''}
               </text>
             </svg>
           </div>
@@ -734,8 +742,7 @@ export default function DashboardView({
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {COMPASS_FOUR.map((c) => {
-            const keyMap = { Personlig: "personal", Relation: "relation", Arbete: "work", Liv: "life" } as const;
-            const score = compassValues ? compassValues[keyMap[c.key as keyof typeof keyMap]] : null;
+            const score = compassValues ? compassValues[c.key as keyof typeof compassValues] : null;
             return (
               <div
                 key={c.key}
@@ -917,12 +924,14 @@ export default function DashboardView({
             </div>
           ) : (
             <div className="space-y-2.5">
-              {goals.map((goal) => {
-                const progress = Number(goal.progress) || 0;
+              {goals.map((goal, idx) => {
+                const rawProg = Number(goal.progress);
+                const progress = Number.isFinite(rawProg) ? Math.max(0, Math.min(100, Math.round(rawProg))) : 0;
+                const safeTitle = String(goal.title || (goal as unknown as Record<string, unknown>).content || "Namnlöst mål").trim();
                 const isDone = progress >= 100 || goal.status === 'completed';
                 return (
                   <div
-                    key={goal.id}
+                    key={goal.id || `goal-${idx}`}
                     className={`rounded-xl p-3.5 border space-y-2 ${subtleSurface}`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -936,7 +945,7 @@ export default function DashboardView({
                               isDone ? 'line-through opacity-70' : ''
                             }`}
                           >
-                            {goal.title}
+                            {safeTitle}
                           </span>
                         </div>
                         {goal.area && (
