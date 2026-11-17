@@ -338,6 +338,17 @@ export default function FalkHomePage() {
       }
     }
 
+    // Kontrollera om användaren har ett aktivt B2B-organisationssäte
+    if (!effectiveIsPremium) {
+      const { data: hasB2bSeat } = await supabase.rpc('user_has_active_b2b_seat', {
+        p_user_id: user.id,
+      });
+      if (hasB2bSeat === true) {
+        effectiveIsPremium = true;
+        setIsPremium(true);
+      }
+    }
+
     // Automatisk inlösen av väntande rabattkod efter e-postaktivering
     let pendingPromo = '';
     try {
@@ -370,10 +381,30 @@ export default function FalkHomePage() {
               window.sessionStorage.removeItem('falk_pending_promo');
             } catch {}
           } else if (redeemRes.status === 400 || redeemRes.status === 409) {
+            // Tyst fallback till B2B-inbjudningskod om det inte var en B2C-rabattkod
             try {
-              window.localStorage.removeItem('falk_pending_promo');
-              window.sessionStorage.removeItem('falk_pending_promo');
-            } catch {}
+              const joinRes = await fetch(`${backendUrl}/api/b2b/join`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ code: pendingPromo }),
+              });
+              const joinJson = await joinRes.json().catch(() => ({}));
+              if (joinRes.ok && joinJson?.ok) {
+                setIsPremium(true);
+              }
+              if (
+                joinRes.ok ||
+                joinRes.status === 400 ||
+                joinRes.status === 403 ||
+                joinRes.status === 404 ||
+                joinRes.status === 409
+              ) {
+                window.localStorage.removeItem('falk_pending_promo');
+                window.sessionStorage.removeItem('falk_pending_promo');
+              }
+            } catch {
+              // Behåll koden vid tillfälligt nätverksfel
+            }
           }
         } catch {
           // Behåll koden vid tillfälligt nätverksfel för nytt försök vid nästa synk

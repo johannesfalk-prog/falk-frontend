@@ -92,6 +92,32 @@ export default function ActionModals({
   const [showLegalDoc, setShowLegalDoc] = useState<'terms' | 'privacy' | null>(null);
   const [promoCode, setPromoCode] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const [hasB2bSeat, setHasB2bSeat] = useState(false);
+
+  useEffect(() => {
+    if (activeModal !== 'settings' || !isPremium || isGuest) {
+      setHasB2bSeat(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user || !active) return;
+        const { data: seatActive } = await supabase.rpc('user_has_active_b2b_seat', {
+          p_user_id: user.id,
+        });
+        if (active) setHasB2bSeat(seatActive === true);
+      } catch {
+        if (active) setHasB2bSeat(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [activeModal, isPremium, isGuest]);
 
   // Feedback state
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -211,8 +237,30 @@ export default function ActionModals({
         headers,
         body: JSON.stringify({ code: trimmed }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 400 || res.status === 404 || res.status === 409) {
+          const joinRes = await fetch(`${backendUrl}/api/b2b/join`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ code: trimmed }),
+          });
+          const joinData = await joinRes.json().catch(() => ({}));
+          if (joinRes.ok && joinData?.ok) {
+            setPromoCode('');
+            try {
+              window.localStorage.removeItem('falk_pending_promo');
+              window.sessionStorage.removeItem('falk_pending_promo');
+            } catch {}
+            setSuccessMsg('Premium har aktiverats!');
+            await onAuthSuccess();
+            setTimeout(() => onClose(), 900);
+            return;
+          }
+          if (trimmed.toUpperCase().startsWith('FALK-') && (joinData?.message || joinData?.error)) {
+            throw new Error(joinData.message || joinData.error);
+          }
+        }
         throw new Error(data.message || data.error || 'Ogiltig eller inaktiv rabattkod.');
       }
       setPromoCode('');
@@ -1297,15 +1345,21 @@ export default function ActionModals({
               </div>
 
               {isPremium ? (
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={openBillingPortal}
-                  className="flex items-center gap-1.5 rounded-xl border border-[#4E5C4B]/40 px-3 py-2 text-xs font-medium hover:bg-[#4E5C4B]/10 transition"
-                >
-                  <span>Hantera medlemskap &amp; betalningsmetod</span>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </button>
+                hasB2bSeat ? (
+                  <p className="text-xs opacity-80">
+                    Ditt Premium-medlemskap är aktivt utan privat kortdebitering.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={openBillingPortal}
+                    className="flex items-center gap-1.5 rounded-xl border border-[#4E5C4B]/40 px-3 py-2 text-xs font-medium hover:bg-[#4E5C4B]/10 transition"
+                  >
+                    <span>Hantera medlemskap &amp; betalningsmetod</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                )
               ) : (
                 <button
                   type="button"
