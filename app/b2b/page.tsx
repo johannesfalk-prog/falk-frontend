@@ -90,6 +90,8 @@ function formatOrgType(orgType?: string): string {
 export default function B2BPortalPage() {
   const [authChecking, setAuthChecking] = useState(true);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [callerRole, setCallerRole] = useState<string | null>(null);
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -147,6 +149,8 @@ export default function B2BPortalPage() {
 
         if (analyticsRes.status === 401 || membersRes.status === 401) {
           setSessionEmail(null);
+          setSessionUserId(null);
+          setCallerRole(null);
           return;
         }
 
@@ -160,6 +164,7 @@ export default function B2BPortalPage() {
           setAnalytics(null);
           setMembers([]);
           setInvites([]);
+          setCallerRole(null);
           return;
         }
 
@@ -177,6 +182,15 @@ export default function B2BPortalPage() {
         setAnalytics(analyticsJson.analytics || {});
         setMembers(Array.isArray(membersJson.members) ? membersJson.members : []);
         setInvites(Array.isArray(membersJson.invites) ? membersJson.invites : []);
+        const resolvedRole =
+          membersJson.caller_role ||
+          membersJson.current_user_role ||
+          analyticsJson.caller_role ||
+          analyticsJson.role ||
+          null;
+        if (resolvedRole) {
+          setCallerRole(resolvedRole);
+        }
       } catch (err: any) {
         setErrorMsg(err?.message || "Ett oväntat fel uppstod vid hämtning av organisationsdata.");
       } finally {
@@ -194,13 +208,17 @@ export default function B2BPortalPage() {
         return;
       }
       const { data } = await supabase.auth.getSession();
-      const email = data?.session?.user?.email || null;
+      const user = data?.session?.user || null;
+      const email = user?.email || null;
+      const uid = user?.id || null;
+      if (email && mounted) {
+        setSessionUserId(uid);
+        await loadOrganizationData("");
+      }
       if (mounted) {
+        setSessionUserId(uid);
         setSessionEmail(email);
         setAuthChecking(false);
-      }
-      if (email && mounted) {
-        await loadOrganizationData("");
       }
     }
     initAuth();
@@ -221,9 +239,11 @@ export default function B2BPortalPage() {
       });
       if (error) throw error;
       const email = data?.user?.email || loginEmail.trim();
-      setSessionEmail(email);
+      const uid = data?.user?.id || null;
+      setSessionUserId(uid);
       setLoginPassword("");
       await loadOrganizationData(departmentFilter);
+      setSessionEmail(email);
     } catch (err: any) {
       setLoginError(err?.message || "Inloggningen misslyckades. Kontrollera e-post och lösenord.");
     } finally {
@@ -236,6 +256,8 @@ export default function B2BPortalPage() {
       await supabase.auth.signOut();
     }
     setSessionEmail(null);
+    setSessionUserId(null);
+    setCallerRole(null);
     setOrgInfo(null);
     setAnalytics(null);
     setMembers([]);
@@ -401,6 +423,33 @@ export default function B2BPortalPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "sv"));
   }, [members, invites]);
 
+  const effectiveRole = useMemo(() => {
+    if (callerRole) return callerRole;
+    const me = members.find(
+      (m) =>
+        m.status === "active" &&
+        ((sessionUserId && m.user_id === sessionUserId) ||
+          (sessionEmail && m.email && m.email.toLowerCase() === sessionEmail.toLowerCase()))
+    );
+    return me?.role || "hr_viewer";
+  }, [callerRole, members, sessionUserId, sessionEmail]);
+
+  const isOrgAdmin = effectiveRole === "org_admin";
+
+  const activeAdminCount = useMemo(
+    () => members.filter((m) => m.status === "active" && m.role === "org_admin").length,
+    [members]
+  );
+
+  const isSelfMember = useCallback(
+    (m: OrgMember) =>
+      Boolean(
+        (sessionUserId && m.user_id === sessionUserId) ||
+          (sessionEmail && m.email && m.email.toLowerCase() === sessionEmail.toLowerCase())
+      ),
+    [sessionUserId, sessionEmail]
+  );
+
   const parsedMetrics = useMemo(() => {
     if (!analytics || typeof analytics !== "object") {
       return {
@@ -484,6 +533,15 @@ export default function B2BPortalPage() {
     return (
       <div className="min-h-screen bg-[#E8DCC4] text-[#1C211B] flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-8 shadow-sm">
+          <div className="mb-4">
+            <a
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4E5C4B] hover:text-[#1C211B] transition"
+            >
+              <span>&larr;</span>
+              <span>Tillbaka till FALK</span>
+            </a>
+          </div>
           <div className="mb-6">
             <p className="text-xs uppercase tracking-[0.2em] text-[#4E5C4B] font-semibold">
               FALK ORGANISATION &amp; HR
@@ -550,21 +608,35 @@ export default function B2BPortalPage() {
       {/* Toppmeny */}
       <header className="border-b border-[#4E5C4B]/15 bg-[#E8DCC4]/95 sticky top-0 z-10 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-lg font-bold tracking-[0.18em] text-[#1C211B]">
-                FALK
-              </span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#4E5C4B] text-white font-medium">
-                {orgInfo ? formatOrgType(orgInfo.org_type) : "Organisationsvy"}
-              </span>
+          <div className="flex items-center gap-4">
+            <a
+              href="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#4E5C4B]/30 bg-[#F7F2E8]/80 text-xs font-medium text-[#1C211B] hover:bg-[#4E5C4B]/10 transition"
+            >
+              <span>&larr;</span>
+              <span>Tillbaka till FALK</span>
+            </a>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <span className="text-lg font-bold tracking-[0.18em] text-[#1C211B]">
+                  FALK
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#4E5C4B] text-white font-medium">
+                  {orgInfo ? formatOrgType(orgInfo.org_type) : "Organisationsvy"}
+                </span>
+              </div>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                {orgInfo?.name || "Fågelperspektiv för team & organisation"}
+              </p>
             </div>
-            <p className="text-xs text-[#4E5C4B] mt-0.5">
-              {orgInfo?.name || "Fågelperspektiv för team & organisation"}
-            </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {!accessDeniedMsg && (
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#F7F2E8] border border-[#4E5C4B]/20 text-[#1C211B] font-medium">
+                {formatRole(effectiveRole)}
+              </span>
+            )}
             <span className="text-xs text-[#4E5C4B] hidden sm:inline">{sessionEmail}</span>
             <button
               onClick={handleLogout}
@@ -751,12 +823,15 @@ export default function B2BPortalPage() {
                     </label>
                     <select
                       value={inviteRole}
+                      disabled={!isOrgAdmin}
                       onChange={(e) => setInviteRole(e.target.value as any)}
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B] disabled:opacity-60"
                     >
                       <option value="member">Medarbetare / Deltagare</option>
                       <option value="hr_viewer">HR-analytiker (läsbehörighet)</option>
-                      <option value="org_admin">Organisationsadministratör</option>
+                      {isOrgAdmin && (
+                        <option value="org_admin">Organisationsadministratör</option>
+                      )}
                     </select>
                   </div>
 
@@ -817,10 +892,14 @@ export default function B2BPortalPage() {
 
                   <button
                     type="submit"
-                    disabled={creatingInvite}
+                    disabled={creatingInvite || !isOrgAdmin}
                     className="w-full py-2.5 px-4 rounded-xl bg-[#C57B57] text-white text-xs font-semibold hover:bg-[#B26B48] transition disabled:opacity-50"
                   >
-                    {creatingInvite ? "Skapar kod..." : "Generera inbjudningskod"}
+                    {!isOrgAdmin
+                      ? "Endast Organisationsadmin kan skapa koder"
+                      : creatingInvite
+                        ? "Skapar kod..."
+                        : "Generera inbjudningskod"}
                   </button>
                 </form>
               </div>
@@ -914,12 +993,26 @@ export default function B2BPortalPage() {
                     <tbody className="divide-y divide-[#4E5C4B]/10 text-xs">
                       {members.map((m) => {
                         const isEditing = editingMemberId === m.id;
+                        const isSelf = isSelfMember(m);
+                        const isTargetAdmin = m.role === "org_admin";
+                        const isLastAdmin = isTargetAdmin && activeAdminCount <= 1;
+                        const roleLocked = isTargetAdmin && (isSelf || isLastAdmin);
+                        const canManageRow = isOrgAdmin;
+                        const canRevokeRow = isOrgAdmin && !isSelf && !isLastAdmin;
+
                         return (
                           <tr key={m.id} className="hover:bg-white/40">
                             <td className="py-3 pr-4">
-                              <p className="font-medium text-[#1C211B]">
-                                {m.email || `Användare ${m.user_id.slice(0, 8)}...`}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-[#1C211B]">
+                                  {m.email || `Användare ${m.user_id.slice(0, 8)}...`}
+                                </p>
+                                {isSelf && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4E5C4B]/15 text-[#1C211B] font-semibold">
+                                    Du
+                                  </span>
+                                )}
+                              </div>
                               {m.joined_at && (
                                 <p className="text-[11px] text-[#4E5C4B]">
                                   Ansluten {new Date(m.joined_at).toLocaleDateString("sv-SE")}
@@ -929,17 +1022,32 @@ export default function B2BPortalPage() {
 
                             <td className="py-3 px-4">
                               {isEditing ? (
-                                <select
-                                  value={editRole}
-                                  onChange={(e) => setEditRole(e.target.value)}
-                                  className="px-2 py-1 rounded bg-white border border-[#4E5C4B]/30 text-xs"
-                                >
-                                  <option value="member">Medarbetare / Deltagare</option>
-                                  <option value="hr_viewer">HR-analytiker</option>
-                                  <option value="org_admin">Organisationsadmin</option>
-                                </select>
+                                <div className="space-y-1">
+                                  <select
+                                    value={editRole}
+                                    disabled={roleLocked}
+                                    onChange={(e) => setEditRole(e.target.value)}
+                                    className="px-2 py-1 rounded bg-white border border-[#4E5C4B]/30 text-xs disabled:opacity-60"
+                                  >
+                                    <option value="member">Medarbetare / Deltagare</option>
+                                    <option value="hr_viewer">HR-analytiker</option>
+                                    <option value="org_admin">Organisationsadmin</option>
+                                  </select>
+                                  {roleLocked && (
+                                    <p className="text-[10px] text-[#4E5C4B]">
+                                      Skyddad högsta roll
+                                    </p>
+                                  )}
+                                </div>
                               ) : (
-                                formatRole(m.role)
+                                <div className="flex items-center gap-1.5">
+                                  <span>{formatRole(m.role)}</span>
+                                  {isTargetAdmin && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4E5C4B]/10 text-[#4E5C4B] font-medium">
+                                      Högsta nivå
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </td>
 
@@ -972,7 +1080,11 @@ export default function B2BPortalPage() {
                             <td className="py-3 pl-4 text-right space-x-2">
                               {m.status === "active" && (
                                 <>
-                                  {isEditing ? (
+                                  {!canManageRow ? (
+                                    <span className="text-[11px] text-[#4E5C4B]">
+                                      Läsbehörighet
+                                    </span>
+                                  ) : isEditing ? (
                                     <>
                                       <button
                                         type="button"
@@ -999,14 +1111,16 @@ export default function B2BPortalPage() {
                                       >
                                         Ändra
                                       </button>
-                                      <button
-                                        type="button"
-                                        disabled={revokingMemberId === m.id}
-                                        onClick={() => handleRevokeMember(m)}
-                                        className="px-2.5 py-1 rounded border border-[#C57B57]/50 text-[#8F3519] hover:bg-[#C57B57]/15"
-                                      >
-                                        {revokingMemberId === m.id ? "..." : "Återkalla"}
-                                      </button>
+                                      {canRevokeRow && (
+                                        <button
+                                          type="button"
+                                          disabled={revokingMemberId === m.id}
+                                          onClick={() => handleRevokeMember(m)}
+                                          className="px-2.5 py-1 rounded border border-[#C57B57]/50 text-[#8F3519] hover:bg-[#C57B57]/15"
+                                        >
+                                          {revokingMemberId === m.id ? "..." : "Återkalla"}
+                                        </button>
+                                      )}
                                     </>
                                   )}
                                 </>
