@@ -7,6 +7,7 @@ import {
   DEVELOPMENT_AREAS,
   UserTier,
   computeCompassFromAreas,
+  CalibrationExploreData,
 } from "../lib/types";
 import { getAuthHeaders } from "../lib/supabase";
 
@@ -19,7 +20,7 @@ interface CalibrationModalProps {
   darkMode: boolean;
   savedScores: Record<string, number> | null;
   onSaved: (scores: Record<string, number>) => void;
-  onExploreWithFalk: (prompt: string) => void;
+  onExploreWithFalk: (data: CalibrationExploreData) => void;
 }
 
 const QUICK_LEVELS = [
@@ -105,14 +106,11 @@ export default function CalibrationModal({
   };
 
   const handleExplore = () => {
-    const sortedAreas = [...DEVELOPMENT_AREAS].sort(
-      (a, b) => (areaScores[a.name] ?? 60) - (areaScores[b.name] ?? 60)
-    );
-    const lowest = sortedAreas[0];
-    const highest = sortedAreas[sortedAreas.length - 1];
-    const prompt = `Jag har precis gjort en kompasskalibrering. Mina 4 kompasser ligger på: Personlig ${computed.Personlig}%, Relation ${computed.Relation}%, Arbete ${computed.Arbete}% och Liv ${computed.Liv}%. Mitt lägsta område just nu är ${lowest.name} (${areaScores[lowest.name]}%) och mitt starkaste är ${highest.name} (${areaScores[highest.name]}%). Hjälp mig reflektera kring min riktning och vad ett rimligt nästa steg kan vara.`;
     onClose();
-    onExploreWithFalk(prompt);
+    onExploreWithFalk({
+      compassScores: computed,
+      areaScores: { ...areaScores },
+    });
   };
 
   return (

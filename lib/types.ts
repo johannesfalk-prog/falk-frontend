@@ -5,7 +5,19 @@ export interface MessageVariant {
   mode: string;
 }
 
+export interface AreaBadge {
+  name: string;
+  score: number;
+  compass: string;
+}
+
+export interface CalibrationExploreData {
+  compassScores: Record<string, number>;
+  areaScores: Record<string, number>;
+}
+
 export interface Message {
+  areaBadges?: AreaBadge[];
   id: string;
   sender: "user" | "falk";
   content: string;

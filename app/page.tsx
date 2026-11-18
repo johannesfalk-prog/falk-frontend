@@ -37,6 +37,8 @@ import {
   ONBOARDING_CARDS,
   COMPASS_FOUR,
   DEVELOPMENT_AREAS,
+  AreaBadge,
+  CalibrationExploreData,
 } from '../lib/types';
 import SideDrawers, {
   MainView,
@@ -654,6 +656,44 @@ export default function FalkHomePage() {
     await loadUserData();
   };
 
+  // Öppna FALKs sammanfattning direkt efter kompasskalibrering (utan användarbubbla)
+  const handleExploreCalibration = (data: CalibrationExploreData) => {
+    const { compassScores, areaScores } = data;
+    const sortedBadges: AreaBadge[] = [...DEVELOPMENT_AREAS]
+      .map((a) => ({
+        name: a.name,
+        score: areaScores[a.name] ?? 60,
+        compass: a.compass,
+      }))
+      .sort((a, b) => a.score - b.score);
+
+    const lowest = sortedBadges[0];
+    const highest = sortedBadges[sortedBadges.length - 1];
+
+    const summaryText =
+      `Jag har tagit del av din kompasskalibrering och lyfter blicken för att se helheten just nu.\n\n` +
+      `Dina fyra kompasser ligger på Personlig ${compassScores.Personlig ?? 60}%, Relation ${compassScores.Relation ?? 60}%, Arbete ${compassScores.Arbete ?? 60}% och Liv ${compassScores.Liv ?? 60}%.\n\n` +
+      `Just nu tar ${lowest.name} (${lowest.score}%) mest utrymme att utforska vidare, medan ${highest.name} (${highest.score}%) ser ut att ha en stabilare grund.\n\n` +
+      `Välj ett av utvecklingsområdena nedan som du vill utforska tillsammans, eller skriv fritt vad som känns viktigast för dig just nu.`;
+
+    const falkSummaryMsg: Message = {
+      id: `falk-cal-${Date.now()}`,
+      sender: 'falk',
+      content: summaryText,
+      timestamp: new Date().toISOString(),
+      variants: [{ content: summaryText, mode: 'default' }],
+      activeVariantIndex: 0,
+      feedback: null,
+      areaBadges: sortedBadges,
+    };
+
+    setActiveConversationId(null);
+    setInputText('');
+    setIsFocusOpen(false);
+    setActiveView('chat');
+    setMessages([falkSummaryMsg]);
+  };
+
   // Skicka meddelande till FALK
   const handleSendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? inputText).trim();
@@ -1250,6 +1290,62 @@ export default function FalkHomePage() {
                     >
                       <div className="whitespace-pre-wrap">{displayContent}</div>
 
+                      {/* Klickbara notisbrickor/badges per utvecklingsområde efter kompasskalibrering */}
+                      {msg.areaBadges && msg.areaBadges.length > 0 && (
+                        <div
+                          className={`mt-4 pt-3 border-t ${
+                            darkMode ? 'border-[#383630]' : 'border-[#EFE7D8]'
+                          }`}
+                        >
+                          <p
+                            className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${
+                              darkMode ? 'text-[#A89F91]' : 'text-[#6E675C]'
+                            }`}
+                          >
+                            Utforska ett utvecklingsområde
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {msg.areaBadges.map((badge) => {
+                              const needsCare = badge.score < 50;
+                              return (
+                                <button
+                                  key={badge.name}
+                                  type="button"
+                                  disabled={isSending}
+                                  onClick={() =>
+                                    handleSendMessage(
+                                      `Jag vill utforska området ${badge.name} (${badge.score}%, ${badge.compass}-kompassen) utifrån min kompasskalibrering. Hjälp mig reflektera kring var jag står och vad ett rimligt nästa steg kan vara.`
+                                    )
+                                  }
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition disabled:opacity-50 ${
+                                    needsCare
+                                      ? darkMode
+                                        ? 'bg-[#C57B57]/20 border-[#C57B57]/60 text-[#F5EFE6] hover:bg-[#C57B57]/30'
+                                        : 'bg-[#C57B57]/12 border-[#C57B57]/50 text-[#8A4626] hover:bg-[#C57B57]/20'
+                                      : darkMode
+                                      ? 'bg-[#2F2D28] border-[#45423A] text-[#E5DEC9] hover:bg-[#3A3832]'
+                                      : 'bg-[#F7F2E8] border-[#D4C7AF] text-[#2F3A2D] hover:bg-[#EFE6D5]'
+                                  }`}
+                                >
+                                  <span>{badge.name}</span>
+                                  <span
+                                    className={`font-semibold ${
+                                      needsCare
+                                        ? 'text-[#C57B57]'
+                                        : darkMode
+                                        ? 'text-[#A8BFA1]'
+                                        : 'text-[#4E5C4B]'
+                                    }`}
+                                  >
+                                    {badge.score}%
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Svarskarusell om flera varianter finns i samma bubbla */}
                       {variants.length > 1 && (
                         <div
@@ -1294,7 +1390,7 @@ export default function FalkHomePage() {
                     </div>
 
                     {/* DE 9 SVARSIKONERNA UNDER VARJE FALK-MEDDELANDE */}
-                    <div className="flex flex-wrap items-center gap-1.5 max-w-full mt-2.5 pt-3 pb-1.5 ml-0.5">
+                    <div className="flex flex-wrap items-center gap-1.5 max-w-full mt-1 pt-1.5 pb-1.5 ml-0.5">
                       {/* Kluster 1: 4 öppna interaktionsikoner */}
                       <div
                         className={`inline-flex flex-wrap items-center gap-1 px-1.5 py-1 rounded-xl border ${
@@ -1913,7 +2009,7 @@ export default function FalkHomePage() {
         darkMode={darkMode}
         savedScores={savedCompassScores}
         onSaved={(scores) => setSavedCompassScores(scores)}
-        onExploreWithFalk={(prompt) => handleSendMessage(prompt)}
+        onExploreWithFalk={handleExploreCalibration}
       />
     </div>
   );
