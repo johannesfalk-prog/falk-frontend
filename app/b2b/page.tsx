@@ -3,7 +3,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, getAuthHeaders } from "@/lib/supabase";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5001";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  (typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://127.0.0.1:5001"
+    : "https://falk-backend.onrender.com");
 
 interface OrgSummary {
   id: string;
@@ -248,10 +253,10 @@ export default function B2BPortalPage() {
     setSuccessMsg("");
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`${BACKEND_URL}/api/promo/redeem`, {
+      const res = await fetch(`${BACKEND_URL}/api/b2b/join`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ code: redeemCode.trim() }),
+        body: JSON.stringify({ invite_code: redeemCode.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
