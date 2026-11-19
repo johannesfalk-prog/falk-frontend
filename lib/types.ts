@@ -380,3 +380,20 @@ export function computeB2bCompassFromAreas(
     ),
   };
 }
+
+export interface JournalChapterItem {
+  id: string;
+  conversation_id?: string | null;
+  chapter_number: number;
+  chapter_title: string;
+  summary: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface MemoryItem {
+  id: string;
+  category: string;
+  content: string;
+  created_at: string;
+}

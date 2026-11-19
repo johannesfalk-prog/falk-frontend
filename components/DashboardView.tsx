@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  BookOpen,
+  Brain,
   CheckCircle2,
   Compass,
   Lightbulb,
@@ -19,6 +21,8 @@ import {
   COMPASS_FOUR,
   DEVELOPMENT_AREAS,
   GoalItem,
+  JournalChapterItem,
+  MemoryItem,
   computeCompassFromAreas,
 } from '../lib/types';
 
@@ -113,14 +117,21 @@ export default function DashboardView({
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [goalActionId, setGoalActionId] = useState<string | null>(null);
 
+  // Compass Journal ("Livsboken") & FALKs Minne (Kontinuitet)
+  const [journalChapters, setJournalChapters] = useState<JournalChapterItem[]>([]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null);
+
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const headers = await getAuthHeaders();
-      const [calRes, goalsRes] = await Promise.all([
+      const [calRes, goalsRes, journalRes, memoriesRes] = await Promise.all([
         fetch(`${backendUrl}/api/calibration`, { headers }),
         fetch(`${backendUrl}/api/goals`, { headers }),
+        fetch(`${backendUrl}/api/journal`, { headers }),
+        fetch(`${backendUrl}/api/memories`, { headers }),
       ]);
 
       if (calRes.ok) {
@@ -154,6 +165,22 @@ export default function DashboardView({
             ? goalsJson
             : [];
         setGoals(list as GoalItem[]);
+      }
+
+      if (journalRes.ok) {
+        const journalJson = await journalRes.json();
+        const chaptersList = Array.isArray(journalJson?.chapters)
+          ? journalJson.chapters
+          : [];
+        setJournalChapters(chaptersList as JournalChapterItem[]);
+      }
+
+      if (memoriesRes.ok) {
+        const memoriesJson = await memoriesRes.json();
+        const memoriesList = Array.isArray(memoriesJson?.memories)
+          ? memoriesJson.memories
+          : [];
+        setMemories(memoriesList as MemoryItem[]);
       }
     } catch {
       setError('Kunde inte hämta utvecklingsdata just nu.');
@@ -303,6 +330,30 @@ export default function DashboardView({
       );
     } finally {
       setGoalActionId(null);
+    }
+  };
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    if (!memoryId || deletingMemoryId) return;
+    setDeletingMemoryId(memoryId);
+    const prevMemories = memories;
+    setMemories((prev) => prev.filter((m) => m.id !== memoryId));
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(
+        `${backendUrl}/api/memories/${encodeURIComponent(memoryId)}`,
+        {
+          method: 'DELETE',
+          headers,
+        }
+      );
+      if (!res.ok) {
+        setMemories(prevMemories);
+      }
+    } catch {
+      setMemories(prevMemories);
+    } finally {
+      setDeletingMemoryId(null);
     }
   };
 
@@ -1036,6 +1087,157 @@ export default function DashboardView({
 
           <div className={`rounded-xl p-3 border text-[11px] opacity-80 ${subtleSurface}`}>
             Kom ihåg: Riktning före hastighet. Framsteg, inte perfektion.
+          </div>
+        </div>
+      </div>
+
+      {/* COMPASS JOURNAL ("LIVSBOKEN") & FALKS MINNE (KONTINUITET) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* COMPASS JOURNAL - LIVSBOKEN (7 KOLUMNER) */}
+        <div className={`lg:col-span-7 rounded-2xl p-5 border shadow-xs space-y-4 ${cardSurface}`}>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-[#C57B57]" />
+                <span>Compass Journal™ – Livsboken</span>
+              </h3>
+              <p className="text-xs opacity-70 mt-0.5">
+                Din levande utvecklingsberättelse – varje fördjupat samtal blir ett nytt kapitel.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onStartReflection(
+                  'Hjälp mig utforska ett nytt kapitel i min Livsbok utifrån var jag befinner mig just nu.'
+                )
+              }
+              className="text-[11px] px-3 py-1.5 rounded-xl bg-[#4E5C4B] text-white font-semibold hover:opacity-90 inline-flex items-center gap-1"
+            >
+              <MessageSquare className="w-3 h-3" />
+              <span>Nytt kapitel</span>
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="py-6 flex items-center justify-center text-xs opacity-70 gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Laddar din Livsbok...</span>
+            </div>
+          ) : journalChapters.length === 0 ? (
+            <div className={`rounded-xl p-5 border text-center text-xs opacity-75 space-y-1.5 ${subtleSurface}`}>
+              <p className="font-medium">Din Livsbok väntar på sitt första kapitel.</p>
+              <p className="text-[11px] opacity-80">
+                När du fördjupar dina samtal med FALK sammanfattas de automatiskt till kapitel som synliggör din riktning över tid.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+              {journalChapters.map((chapter, idx) => (
+                <div
+                  key={chapter.id || `chapter-${idx}`}
+                  className={`rounded-xl p-4 border space-y-2 ${subtleSurface}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#C57B57]/15 text-[#C57B57]">
+                      Kapitel {chapter.chapter_number}
+                    </span>
+                    {(chapter.updated_at || chapter.created_at) && (
+                      <span className="text-[10px] opacity-60">
+                        {new Date(
+                          chapter.updated_at || chapter.created_at || ''
+                        ).toLocaleDateString('sv-SE')}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-xs font-bold leading-snug">
+                    {chapter.chapter_title}
+                  </h4>
+                  <p className="text-xs opacity-85 leading-relaxed">
+                    {chapter.summary}
+                  </p>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onStartReflection(
+                          `Jag vill återvända till Kapitel ${chapter.chapter_number} ("${chapter.chapter_title}") i min Livsbok. Hjälp mig se vilket mönster eller nästa steg som är viktigast nu.`
+                        )
+                      }
+                      className="text-[11px] font-semibold text-[#4E5C4B] dark:text-[#A8BFA1] hover:underline inline-flex items-center gap-1"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span>Reflektera vidare kring detta kapitel</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* FALKS MINNE - KONTINUITET (5 KOLUMNER) */}
+        <div className={`lg:col-span-5 rounded-2xl p-5 border shadow-xs flex flex-col justify-between space-y-4 ${cardSurface}`}>
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-bold flex items-center gap-1.5">
+                <Brain className="w-4 h-4 text-[#4E5C4B] dark:text-[#A8BFA1]" />
+                <span>FALKs Minne – Kontinuitet</span>
+              </h3>
+              <p className="text-xs opacity-70 mt-0.5">
+                Värderingar, mönster och riktning som FALK bär med sig mellan era samtal.
+              </p>
+            </div>
+
+            {loading ? (
+              <div className="py-6 flex items-center justify-center text-xs opacity-70 gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Hämtar minnen...</span>
+              </div>
+            ) : memories.length === 0 ? (
+              <div className={`rounded-xl p-4 border text-xs opacity-75 leading-relaxed ${subtleSurface}`}>
+                FALK sparar inte småprat, utan bara det som hjälper dig växa över tid. När viktiga värderingar, mål eller mönster framträder i era samtal visas de här.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                {memories.map((mem, idx) => (
+                  <div
+                    key={mem.id || `mem-${idx}`}
+                    className={`rounded-xl p-3 border space-y-1.5 ${subtleSurface}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#4E5C4B]/15 text-[#4E5C4B] dark:text-[#A8BFA1]">
+                        {mem.category || 'Kontinuitet'}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {mem.created_at && (
+                          <span className="text-[10px] opacity-60">
+                            {new Date(mem.created_at).toLocaleDateString('sv-SE')}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMemory(mem.id)}
+                          disabled={deletingMemoryId === mem.id}
+                          title="Glöm detta minne permanent"
+                          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md opacity-65 hover:opacity-100 hover:text-red-500 transition-opacity disabled:opacity-40"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Glöm</span>
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs leading-relaxed opacity-90">
+                      {mem.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={`rounded-xl p-3 border text-[11px] opacity-80 ${subtleSurface}`}>
+            Falk minns din riktning – inte ditt bagage. Klicka på Glöm för att radera ett minne permanent.
           </div>
         </div>
       </div>
