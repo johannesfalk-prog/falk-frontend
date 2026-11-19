@@ -5,8 +5,11 @@ import { Compass, X, Check, ArrowRight, Sparkles } from "lucide-react";
 import {
   COMPASS_FOUR,
   DEVELOPMENT_AREAS,
+  B2B_COMPASS_FOUR,
+  B2B_DEVELOPMENT_AREAS,
   UserTier,
   computeCompassFromAreas,
+  computeB2bCompassFromAreas,
   CalibrationExploreData,
 } from "../lib/types";
 import { getAuthHeaders } from "../lib/supabase";
@@ -21,6 +24,7 @@ interface CalibrationModalProps {
   savedScores: Record<string, number> | null;
   onSaved: (scores: Record<string, number>) => void;
   onExploreWithFalk: (data: CalibrationExploreData) => void;
+  segment?: "b2c" | "b2b";
 }
 
 const QUICK_LEVELS = [
@@ -41,11 +45,16 @@ export default function CalibrationModal({
   savedScores,
   onSaved,
   onExploreWithFalk,
+  segment = "b2c",
 }: CalibrationModalProps) {
+  const isB2b = segment === "b2b";
+  const activeAreas = isB2b ? B2B_DEVELOPMENT_AREAS : DEVELOPMENT_AREAS;
+  const activeCompasses = isB2b ? B2B_COMPASS_FOUR : COMPASS_FOUR;
+
   const [view, setView] = useState<"wizard" | "overview">(initialView);
   const [areaScores, setAreaScores] = useState<Record<string, number>>(() => {
     const base: Record<string, number> = {};
-    DEVELOPMENT_AREAS.forEach((a) => {
+    activeAreas.forEach((a) => {
       base[a.name] = savedScores?.[a.name] ?? 60;
     });
     return base;
@@ -56,36 +65,39 @@ export default function CalibrationModal({
   useEffect(() => {
     setView(initialView);
     setStatusMsg(null);
-    if (savedScores) {
-      setAreaScores((prev) => {
-        const next = { ...prev };
-        DEVELOPMENT_AREAS.forEach((a) => {
-          if (typeof savedScores[a.name] === "number") {
-            next[a.name] = savedScores[a.name];
-          }
-        });
-        return next;
-      });
-    }
-  }, [isOpen, initialView, savedScores]);
+    const next: Record<string, number> = {};
+    activeAreas.forEach((a) => {
+      next[a.name] = typeof savedScores?.[a.name] === "number" ? savedScores[a.name] : 60;
+    });
+    setAreaScores(next);
+  }, [isOpen, initialView, savedScores, isB2b]);
 
   if (!isOpen) return null;
 
-  const computed = computeCompassFromAreas(areaScores);
+  const computed: Record<string, number> = isB2b
+    ? computeB2bCompassFromAreas(areaScores)
+    : computeCompassFromAreas(areaScores);
 
   const handleSave = async () => {
     setSaving(true);
     setStatusMsg(null);
     try {
+      const storageKey = isB2b ? "falk_latest_b2b_calibration" : "falk_latest_calibration";
       if (typeof window !== "undefined") {
-        localStorage.setItem("falk_latest_calibration", JSON.stringify(computed));
+        localStorage.setItem(storageKey, JSON.stringify(computed));
       }
       if (userTier !== "guest") {
         const headers = await getAuthHeaders();
-        const res = await fetch(`${backendUrl}/api/calibration`, {
+        const endpoint = isB2b
+          ? `${backendUrl}/api/calibration?segment=b2b`
+          : `${backendUrl}/api/calibration`;
+        const payload = isB2b
+          ? { scores: computed, area_scores: areaScores, segment: "b2b" }
+          : { scores: computed };
+        const res = await fetch(endpoint, {
           method: "POST",
           headers,
-          body: JSON.stringify({ scores: computed }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           throw new Error("Kunde inte spara kalibreringen i databasen.");
@@ -94,7 +106,11 @@ export default function CalibrationModal({
       onSaved(computed);
       setView("overview");
       setStatusMsg(
-        userTier === "guest"
+        isB2b
+          ? userTier === "guest"
+            ? "B2B-kalibrering sparad för din session. Logga in med ditt företagskonto för att spara i organisationens underlag."
+            : "Din B2B-kompasskalibrering är sparad i din arbetsprofil."
+          : userTier === "guest"
           ? "Kalibrering sparad för din session. Logga in för att spara historik över tid."
           : "Din kompasskalibrering är sparad i din utvecklingsprofil."
       );
@@ -134,10 +150,12 @@ export default function CalibrationModal({
             </div>
             <div>
               <h2 className="text-base font-semibold tracking-tight">
-                Kompasskalibrering™
+                {isB2b ? "Arbetskompass – B2B Kalibrering™" : "Kompasskalibrering™"}
               </h2>
               <p className="text-xs opacity-75">
-                4 kompasser · 8 utvecklingsområden · Nuläge utan prestation
+                {isB2b
+                  ? "4 arbetskompasser · 8 fokusområden · Riktning utan prestation"
+                  : "4 kompasser · 8 utvecklingsområden · Nuläge utan prestation"}
               </p>
             </div>
           </div>
@@ -189,7 +207,7 @@ export default function CalibrationModal({
 
           {/* Sammanfattningsrad för de 4 kompasserna */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {COMPASS_FOUR.map((c) => {
+            {activeCompasses.map((c) => {
               const score = computed[c.key] ?? 60;
               return (
                 <div
@@ -223,8 +241,10 @@ export default function CalibrationModal({
               <p className="text-xs opacity-80">
                 Välj det alternativ som bäst speglar ditt nuläge inom varje område. Det finns inga rätt eller fel — bara riktning.
               </p>
-              {DEVELOPMENT_AREAS.map((area, idx) => {
+              {activeAreas.map((area, idx) => {
                 const current = areaScores[area.name] ?? 60;
+                const badgeCompass = "compassLabel" in area ? area.compassLabel : area.compass;
+                const promptText = "question" in area ? area.question : area.prompt;
                 return (
                   <div
                     key={area.name}
@@ -238,11 +258,11 @@ export default function CalibrationModal({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E8DCC4] text-[#4E5C4B]">
-                            {idx + 1}. {area.compass}
+                            {idx + 1}. {badgeCompass}
                           </span>
                           <h3 className="text-sm font-semibold">{area.name}</h3>
                         </div>
-                        <p className="text-xs opacity-75 mt-1">{area.prompt}</p>
+                        <p className="text-xs opacity-75 mt-1">{promptText}</p>
                       </div>
                       <span className="text-sm font-bold text-[#C57B57] shrink-0">
                         {current}%
@@ -281,8 +301,14 @@ export default function CalibrationModal({
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {COMPASS_FOUR.map((c) => {
+                {activeCompasses.map((c) => {
                   const score = computed[c.key] ?? 60;
+                  const compassAreas =
+                    "areas" in c
+                      ? c.areas
+                      : B2B_DEVELOPMENT_AREAS.filter((a) => a.compass === c.key).map(
+                          (a) => a.name
+                        );
                   return (
                     <div
                       key={c.key}
@@ -303,7 +329,7 @@ export default function CalibrationModal({
                       </div>
 
                       <div className="space-y-2 pt-2 border-t border-black/5 dark:border-white/5">
-                        {c.areas.map((areaName) => {
+                        {compassAreas.map((areaName) => {
                           const aVal = areaScores[areaName] ?? 60;
                           return (
                             <div key={areaName} className="space-y-1">

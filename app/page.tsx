@@ -37,6 +37,8 @@ import {
   ONBOARDING_CARDS,
   COMPASS_FOUR,
   DEVELOPMENT_AREAS,
+  B2B_DEVELOPMENT_AREAS,
+  B2bCompassKey,
   AreaBadge,
   CalibrationExploreData,
 } from '../lib/types';
@@ -105,15 +107,25 @@ export default function FalkHomePage() {
     'positive' | 'negative'
   >('positive');
 
-  // Kompasskalibrering
+  // Kompasskalibrering (B2C + B2B tilläggslager)
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [calibrationView, setCalibrationView] = useState<'wizard' | 'overview'>(
     'wizard'
   );
+  const [calibrationSegment, setCalibrationSegment] = useState<'b2c' | 'b2b'>('b2c');
   const [savedCompassScores, setSavedCompassScores] = useState<Record<
     string,
     number
   > | null>(null);
+  const [savedB2bCompassScores, setSavedB2bCompassScores] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  const [hasB2bAccess, setHasB2bAccess] = useState(false);
+  const [b2bContext, setB2bContext] = useState<{
+    active: boolean;
+    level: 'individual' | 'leadership' | 'company';
+  } | null>(null);
 
   // Chatt & historik
   const [conversations, setConversations] = useState<DrawerConversation[]>([]);
@@ -215,6 +227,65 @@ export default function FalkHomePage() {
     localStorage.removeItem('falk_guest_msg_count');
     const storedCount = Number(localStorage.getItem(todayKey) || '0');
     if (!Number.isNaN(storedCount)) setGuestMessageCount(storedCount);
+
+    try {
+      const rawB2bCal = localStorage.getItem('falk_latest_b2b_calibration');
+      if (rawB2bCal) {
+        const parsedB2b = JSON.parse(rawB2bCal);
+        if (parsedB2b && typeof parsedB2b === 'object') {
+          setSavedB2bCompassScores(parsedB2b);
+        }
+      }
+    } catch {
+      // Ignorera trasig lokal B2B-kalibreringsdata
+    }
+
+    if (typeof window !== 'undefined') {
+      const initParams = new URLSearchParams(window.location.search);
+      const segParam = initParams.get('segment');
+      const viewParam = initParams.get('view');
+      const levelParam = initParams.get('b2b_level');
+
+      if (segParam === 'b2b') {
+        const validLevel =
+          levelParam === 'leadership' || levelParam === 'company'
+            ? levelParam
+            : 'individual';
+        setB2bContext({ active: true, level: validLevel });
+
+        if (viewParam === 'calibration') {
+          setCalibrationSegment('b2b');
+          setCalibrationView('wizard');
+          setIsCalibrationOpen(true);
+        } else if (viewParam === 'library') {
+          setActiveView('library');
+        } else if (levelParam === 'individual' || levelParam === 'leadership' || levelParam === 'company') {
+          const introByLevel: Record<'individual' | 'leadership' | 'company', string> = {
+            individual:
+              "Välkommen in i ditt arbets- och självledarskapsperspektiv. Här utforskar vi din riktning, energi och kommunikation i vardagen – helt konfidentiellt för dig.\n\nVad känns viktigast att stanna upp vid i din arbetssituation just nu?",
+            leadership:
+              "Välkommen in i ledarskapsperspektivet. Som ledare bär man ofta både sin egen riktning och andras förväntningar i samma rum.\n\nOm vi lyfter blicken ett ögonblick: var märker du mest friktion eller behov av klarhet i ditt ledarskap just nu?",
+            company:
+              "Välkommen in i organisations- och företagsperspektivet. Här lyfter vi blicken till system, kultur, samarbete och långsiktig hållbarhet – utan att någonsin röra enskilda medarbetares privata samtal.\n\nVilket mönster eller vilken riktning i verksamheten vill du utforska tillsammans?",
+          };
+          const openingText = introByLevel[validLevel];
+          setActiveConversationId(null);
+          setActiveView('chat');
+          setMessages([
+            {
+              id: `falk-b2b-init-${Date.now()}`,
+              sender: 'falk',
+              content: openingText,
+              timestamp: new Date().toISOString(),
+              variants: [{ content: openingText, mode: 'default' }],
+              activeVariantIndex: 0,
+              feedback: null,
+            },
+          ]);
+        }
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
 
     // Hantera återkomst från Stripe Checkout (?checkout=success / ?checkout=canceled)
     if (typeof window !== 'undefined') {
@@ -341,14 +412,14 @@ export default function FalkHomePage() {
     }
 
     // Kontrollera om användaren har ett aktivt B2B-organisationssäte
-    if (!effectiveIsPremium) {
-      const { data: hasB2bSeat } = await supabase.rpc('user_has_active_b2b_seat', {
-        p_user_id: user.id,
-      });
-      if (hasB2bSeat === true) {
-        effectiveIsPremium = true;
-        setIsPremium(true);
-      }
+    const { data: hasB2bSeat } = await supabase.rpc('user_has_active_b2b_seat', {
+      p_user_id: user.id,
+    });
+    const activeB2bSeat = hasB2bSeat === true;
+    setHasB2bAccess(activeB2bSeat);
+    if (activeB2bSeat && !effectiveIsPremium) {
+      effectiveIsPremium = true;
+      setIsPremium(true);
     }
 
     // Automatisk inlösen av väntande rabattkod efter e-postaktivering
@@ -658,23 +729,37 @@ export default function FalkHomePage() {
 
   // Öppna FALKs sammanfattning direkt efter kompasskalibrering (utan användarbubbla)
   const handleExploreCalibration = (data: CalibrationExploreData) => {
-    const { compassScores, areaScores } = data;
-    const sortedBadges: AreaBadge[] = [...DEVELOPMENT_AREAS]
+    const { compassScores, areaScores, segment } = data;
+    const isB2b = segment === 'b2b';
+
+    if (isB2b) {
+      setB2bContext((prev) => ({
+        active: true,
+        level: prev?.level || 'individual',
+      }));
+    }
+
+    const activeAreas = isB2b ? B2B_DEVELOPMENT_AREAS : DEVELOPMENT_AREAS;
+    const sortedBadges: AreaBadge[] = [...activeAreas]
       .map((a) => ({
         name: a.name,
         score: areaScores[a.name] ?? 60,
-        compass: a.compass,
+        compass: a.compass as AreaBadge['compass'],
       }))
       .sort((a, b) => a.score - b.score);
 
     const lowest = sortedBadges[0];
     const highest = sortedBadges[sortedBadges.length - 1];
 
-    const summaryText =
-      `Jag har tagit del av din kompasskalibrering och lyfter blicken för att se helheten just nu.\n\n` +
-      `Dina fyra kompasser ligger på Personlig ${compassScores.Personlig ?? 60}%, Relation ${compassScores.Relation ?? 60}%, Arbete ${compassScores.Arbete ?? 60}% och Liv ${compassScores.Liv ?? 60}%.\n\n` +
-      `Just nu tar ${lowest.name} (${lowest.score}%) mest utrymme att utforska vidare, medan ${highest.name} (${highest.score}%) ser ut att ha en stabilare grund.\n\n` +
-      `Välj ett av utvecklingsområdena nedan som du vill utforska tillsammans, eller skriv fritt vad som känns viktigast för dig just nu.`;
+    const summaryText = isB2b
+      ? `Jag har tagit del av din B2B-kompasskalibrering och lyfter blicken för att se helheten i din arbetssituation just nu.\n\n` +
+        `Dina fyra arbetskompasser ligger på Självledarskap ${(compassScores as Record<B2bCompassKey, number>).b2b_self_leadership ?? 60}%, Team & Tillit ${(compassScores as Record<B2bCompassKey, number>).b2b_team_trust ?? 60}%, Hållbar Energi ${(compassScores as Record<B2bCompassKey, number>).b2b_sustainable_energy ?? 60}% och Riktning & Kultur ${(compassScores as Record<B2bCompassKey, number>).b2b_direction_culture ?? 60}%.\n\n` +
+        `Just nu tar ${lowest.name} (${lowest.score}%) mest utrymme att utforska vidare, medan ${highest.name} (${highest.score}%) ser ut att ha en stabilare grund.\n\n` +
+        `Välj ett av utvecklingsområdena nedan som du vill utforska tillsammans, öppna en guidad B2B-övning i biblioteket, eller skriv fritt vad som känns viktigast för dig just nu.`
+      : `Jag har tagit del av din kompasskalibrering och lyfter blicken för att se helheten just nu.\n\n` +
+        `Dina fyra kompasser ligger på Personlig ${compassScores.Personlig ?? 60}%, Relation ${compassScores.Relation ?? 60}%, Arbete ${compassScores.Arbete ?? 60}% och Liv ${compassScores.Liv ?? 60}%.\n\n` +
+        `Just nu tar ${lowest.name} (${lowest.score}%) mest utrymme att utforska vidare, medan ${highest.name} (${highest.score}%) ser ut att ha en stabilare grund.\n\n` +
+        `Välj ett av utvecklingsområdena nedan som du vill utforska tillsammans, eller skriv fritt vad som känns viktigast för dig just nu.`;
 
     const falkSummaryMsg: Message = {
       id: `falk-cal-${Date.now()}`,
@@ -737,6 +822,7 @@ export default function FalkHomePage() {
         focus_sliders: focusSliders,
         is_guest: isGuest,
         guest_uuid: guestUuid || getOrCreateGuestUuid(),
+        ...(b2bContext?.active ? { b2b_context: b2bContext } : {}),
         history: nextHistory.slice(-10).map((m) => ({
           role: m.sender === 'user' ? 'user' : 'assistant',
           content:
@@ -1634,7 +1720,15 @@ export default function FalkHomePage() {
             backendUrl={backendUrl}
             getAuthHeaders={getAuthHeaders}
             darkMode={darkMode}
+            initialSegment={b2bContext?.active ? 'b2b' : hasB2bAccess ? 'all' : 'b2c'}
+            allowSegmentSwitch={hasB2bAccess || Boolean(b2bContext?.active)}
             onStartExercise={(card) => {
+              if (card.segment === 'b2b') {
+                setB2bContext((prev) => ({
+                  active: true,
+                  level: prev?.level || 'individual',
+                }));
+              }
               setActiveConversationId(null);
               setMessages([]);
               handleSendMessage(card.prompt_trigger || card.title);
@@ -2003,12 +2097,22 @@ export default function FalkHomePage() {
       <CalibrationModal
         isOpen={isCalibrationOpen}
         initialView={calibrationView}
-        onClose={() => setIsCalibrationOpen(false)}
+        segment={calibrationSegment}
+        onClose={() => {
+          setIsCalibrationOpen(false);
+          setCalibrationSegment('b2c');
+        }}
         userTier={userTier}
         backendUrl={backendUrl}
         darkMode={darkMode}
-        savedScores={savedCompassScores}
-        onSaved={(scores) => setSavedCompassScores(scores)}
+        savedScores={calibrationSegment === 'b2b' ? savedB2bCompassScores : savedCompassScores}
+        onSaved={(scores) => {
+          if (calibrationSegment === 'b2b') {
+            setSavedB2bCompassScores(scores);
+          } else {
+            setSavedCompassScores(scores);
+          }
+        }}
         onExploreWithFalk={handleExploreCalibration}
       />
     </div>

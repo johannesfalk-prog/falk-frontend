@@ -14,6 +14,7 @@ export interface AreaBadge {
 export interface CalibrationExploreData {
   compassScores: Record<string, number>;
   areaScores: Record<string, number>;
+  segment?: 'b2c' | 'b2b';
 }
 
 export interface Message {
@@ -223,5 +224,159 @@ export function computeCompassFromAreas(areaScores: Record<string, number>): Rec
     Arbete: avg("Jobb och karriär", "Finans"),
     Liv: avg("Hälsa och träning", "Ägodelar"),
     ...areaScores,
+  };
+}
+
+// ============================================================================
+// B2B TILLÄGGSLAGER (Strikt separerat från B2C COMPASS_FOUR & DEVELOPMENT_AREAS)
+// ============================================================================
+
+export type B2bCompassKey =
+  | 'b2b_self_leadership'
+  | 'b2b_team_trust'
+  | 'b2b_sustainable_energy'
+  | 'b2b_direction_culture';
+
+export type B2bDialogueLevel = 'individ' | 'ledning' | 'foretag';
+
+export interface B2bContextPayload {
+  level: B2bDialogueLevel;
+  org_name?: string;
+  role?: string;
+  topic_hint?: string;
+  compass_scores?: Record<string, number>;
+  compass_averages?: Record<string, number>;
+}
+
+export interface B2bCompassMeta {
+  key: B2bCompassKey;
+  label: string;
+  subtitle: string;
+  question: string;
+}
+
+export const B2B_COMPASS_FOUR: B2bCompassMeta[] = [
+  {
+    key: 'b2b_self_leadership',
+    label: 'Självledarskap',
+    subtitle: 'Tydlighet i roll, prioritering och eget ansvar',
+    question: 'Hur leder jag mig själv och min arbetsvardag just nu?',
+  },
+  {
+    key: 'b2b_team_trust',
+    label: 'Team & Tillit',
+    subtitle: 'Psykologisk trygghet, samarbete och kommunikation',
+    question: 'Hur fungerar tillit, dialog och samarbete i teamet?',
+  },
+  {
+    key: 'b2b_sustainable_energy',
+    label: 'Hållbar Energi',
+    subtitle: 'Arbetsbelastning, återhämtning och hållbart tempo',
+    question: 'Hur hållbar är min energi och återhämtning i arbetet?',
+  },
+  {
+    key: 'b2b_direction_culture',
+    label: 'Riktning & Kultur',
+    subtitle: 'Meningsfullhet, värderingar och gemensam kurs',
+    question: 'Hur tydlig och meningsfull känns riktningen framåt?',
+  },
+];
+
+export interface B2bDevelopmentArea {
+  name: string;
+  compass: B2bCompassKey;
+  compassLabel: string;
+  categoryHint: 'Ledarskap' | 'Kommunikation' | 'Stresshantering' | 'Effektivisering';
+  question: string;
+}
+
+export const B2B_DEVELOPMENT_AREAS: B2bDevelopmentArea[] = [
+  {
+    name: 'Prioritering & fokus',
+    compass: 'b2b_self_leadership',
+    compassLabel: 'Självledarskap',
+    categoryHint: 'Effektivisering',
+    question: 'Hur tydligt kan du prioritera det viktigaste i ditt dagliga arbete?',
+  },
+  {
+    name: 'Beslutsmod & ansvar',
+    compass: 'b2b_self_leadership',
+    compassLabel: 'Självledarskap',
+    categoryHint: 'Ledarskap',
+    question: 'Hur trygg känner du dig i att fatta beslut och ta ägarskap i din roll?',
+  },
+  {
+    name: 'Svåra samtal & feedback',
+    compass: 'b2b_team_trust',
+    compassLabel: 'Team & Tillit',
+    categoryHint: 'Kommunikation',
+    question: 'Hur väl fungerar öppen feedback och svåra samtal med kollegor eller team?',
+  },
+  {
+    name: 'Psykologisk trygghet',
+    compass: 'b2b_team_trust',
+    compassLabel: 'Team & Tillit',
+    categoryHint: 'Ledarskap',
+    question: 'Hur tryggt upplever du att det är att lyfta osäkerhet och idéer i gruppen?',
+  },
+  {
+    name: 'Gränssättning & tempo',
+    compass: 'b2b_sustainable_energy',
+    compassLabel: 'Hållbar Energi',
+    categoryHint: 'Stresshantering',
+    question: 'Hur väl lyckas du sätta gränser och reglera tempot under intensiva perioder?',
+  },
+  {
+    name: 'Återhämtning i vardagen',
+    compass: 'b2b_sustainable_energy',
+    compassLabel: 'Hållbar Energi',
+    categoryHint: 'Stresshantering',
+    question: 'Hur väl får du återhämtning mellan krävande arbetsuppgifter?',
+  },
+  {
+    name: 'Gemensam målbild',
+    compass: 'b2b_direction_culture',
+    compassLabel: 'Riktning & Kultur',
+    categoryHint: 'Effektivisering',
+    question: 'Hur tydligt ser du hur ditt arbete bidrar till organisationens riktning?',
+  },
+  {
+    name: 'Värderingsstyrt ledarskap',
+    compass: 'b2b_direction_culture',
+    compassLabel: 'Riktning & Kultur',
+    categoryHint: 'Kommunikation',
+    question: 'Hur väl genomsyrar era gemensamma värderingar vardagens beslut?',
+  },
+];
+
+export function computeB2bCompassFromAreas(
+  areaScores: Record<string, number>
+): Record<B2bCompassKey, number> {
+  const sums: Record<B2bCompassKey, { total: number; count: number }> = {
+    b2b_self_leadership: { total: 0, count: 0 },
+    b2b_team_trust: { total: 0, count: 0 },
+    b2b_sustainable_energy: { total: 0, count: 0 },
+    b2b_direction_culture: { total: 0, count: 0 },
+  };
+
+  for (const area of B2B_DEVELOPMENT_AREAS) {
+    const val = typeof areaScores[area.name] === 'number' ? areaScores[area.name] : 60;
+    sums[area.compass].total += val;
+    sums[area.compass].count += 1;
+  }
+
+  return {
+    b2b_self_leadership: Math.round(
+      sums.b2b_self_leadership.total / Math.max(1, sums.b2b_self_leadership.count)
+    ),
+    b2b_team_trust: Math.round(
+      sums.b2b_team_trust.total / Math.max(1, sums.b2b_team_trust.count)
+    ),
+    b2b_sustainable_energy: Math.round(
+      sums.b2b_sustainable_energy.total / Math.max(1, sums.b2b_sustainable_energy.count)
+    ),
+    b2b_direction_culture: Math.round(
+      sums.b2b_direction_culture.total / Math.max(1, sums.b2b_direction_culture.count)
+    ),
   };
 }

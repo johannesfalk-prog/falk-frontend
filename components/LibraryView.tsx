@@ -13,11 +13,15 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+export type LibrarySegment = 'b2c' | 'b2b' | 'all';
+
 export interface LibraryCard {
   id: string;
   title: string;
   category: string;
   tag?: string;
+  segment?: 'b2c' | 'b2b';
+  target_level?: string;
   description: string;
   prompt_trigger: string;
 }
@@ -28,6 +32,9 @@ interface LibraryViewProps {
   darkMode: boolean;
   onStartExercise: (card: LibraryCard) => void;
   onBackToChat: () => void;
+  initialSegment?: LibrarySegment;
+  allowSegmentSwitch?: boolean;
+  backLabel?: string;
 }
 
 type SortOption = 'default' | 'title_asc' | 'category_asc';
@@ -68,7 +75,7 @@ function getCategoryBadgeClasses(category: string, darkMode: boolean): string {
   let idx = -1;
 
   if (/(personlig|självledarskap|identitet|självkänsla|självförtroende)/.test(key)) idx = 0;
-  else if (/(arbete|jobb|karriär|ledarskap|fokus|produktivitet|handlingskraft)/.test(key)) idx = 1;
+  else if (/(arbete|jobb|karriär|ledarskap|fokus|produktivitet|handlingskraft|effektivisering|prioritering|samarbete)/.test(key)) idx = 1;
   else if (/(relation|familj|kommunikation|gräns|intim)/.test(key)) idx = 2;
   else if (/(liv|riktning|mening|spiritualitet|kompass|värdering)/.test(key)) idx = 3;
   else if (/(hälsa|träning|stress|återhämtning|lugn|energi|balans)/.test(key)) idx = 4;
@@ -92,20 +99,33 @@ export default function LibraryView({
   darkMode,
   onStartExercise,
   onBackToChat,
+  initialSegment = 'b2c',
+  allowSegmentSwitch = false,
+  backLabel = 'Tillbaka till samtalet',
 }: LibraryViewProps) {
   const [cards, setCards] = useState<LibraryCard[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeSegment, setActiveSegment] = useState<LibrarySegment>(initialSegment);
   const [selectedCategory, setSelectedCategory] = useState<string>('Alla');
   const [sortBy, setSortBy] = useState<SortOption>('default');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const fetchLibrary = async () => {
+  useEffect(() => {
+    setActiveSegment(initialSegment);
+    setSelectedCategory('Alla');
+  }, [initialSegment]);
+
+  const fetchLibrary = async (segmentToFetch: LibrarySegment = activeSegment) => {
     setLoading(true);
     setError(null);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`${backendUrl}/api/library`, { headers });
+      const url =
+        segmentToFetch === 'b2c'
+          ? `${backendUrl}/api/library`
+          : `${backendUrl}/api/library?segment=${encodeURIComponent(segmentToFetch)}`;
+      const res = await fetch(url, { headers });
       if (!res.ok) {
         throw new Error(`Kunde inte hämta biblioteket (${res.status})`);
       }
@@ -128,9 +148,9 @@ export default function LibraryView({
   };
 
   useEffect(() => {
-    fetchLibrary();
+    fetchLibrary(activeSegment);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backendUrl]);
+  }, [backendUrl, activeSegment]);
 
   const categories = useMemo(() => {
     const unique = Array.from(
@@ -191,7 +211,7 @@ export default function LibraryView({
               }`}
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Tillbaka till samtalet
+              {backLabel}
             </button>
             <div className="flex items-center gap-2.5">
               <div
@@ -213,7 +233,11 @@ export default function LibraryView({
                   }`}
                 >
                   {cards.length > 0
-                    ? `${cards.length} guidade övningar för reflektion, riktning och självledarskap`
+                    ? activeSegment === 'b2b'
+                      ? `${cards.length} guidade B2B-övningar för ledarskap, kommunikation, stresshantering och effektivisering`
+                      : activeSegment === 'all'
+                      ? `${cards.length} guidade övningar för personlig utveckling, ledarskap och arbetsliv`
+                      : `${cards.length} guidade övningar för reflektion, riktning och självledarskap`
                     : 'Guidade övningar för reflektion, riktning och självledarskap'}
                 </p>
               </div>
@@ -264,6 +288,40 @@ export default function LibraryView({
             </div>
           </div>
         </div>
+
+        {/* Segmentväxlare (B2C / B2B / Alla) */}
+        {allowSegmentSwitch && (
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              [
+                { id: 'all', label: 'Alla övningar' },
+                { id: 'b2c', label: 'Personligt' },
+                { id: 'b2b', label: 'Arbetsliv & Ledarskap (B2B)' },
+              ] as const
+            ).map((seg) => {
+              const isSelected = activeSegment === seg.id;
+              return (
+                <button
+                  key={seg.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveSegment(seg.id);
+                    setSelectedCategory('Alla');
+                  }}
+                  className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                    isSelected
+                      ? 'bg-[#C57B57] text-white shadow-sm'
+                      : darkMode
+                      ? 'border border-[#333A32] bg-[#212620] text-[#CFC9BC] hover:border-[#C57B57]'
+                      : 'border border-[#D5C7AC] bg-[#F7F3EA] text-[#3B4239] hover:border-[#C57B57]'
+                  }`}
+                >
+                  {seg.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Kategorifilter (Chips) */}
         {categories.length > 1 && (
@@ -317,7 +375,7 @@ export default function LibraryView({
             <p className="text-sm font-medium">{error}</p>
             <button
               type="button"
-              onClick={fetchLibrary}
+              onClick={() => fetchLibrary(activeSegment)}
               className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#C57B57] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -378,15 +436,28 @@ export default function LibraryView({
                       <Sparkles className="h-3 w-3" />
                       {card.category}
                     </span>
-                    {card.tag && (
-                      <span
-                        className={`text-[11px] font-medium ${
-                          darkMode ? 'text-[#8E968C]' : 'text-[#7C7568]'
-                        }`}
-                      >
-                        {card.tag}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {card.segment === 'b2b' && (
+                        <span
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            darkMode
+                              ? 'bg-[#38251D] text-[#E6A382]'
+                              : 'bg-[#F5E4D7] text-[#8A4626]'
+                          }`}
+                        >
+                          B2B
+                        </span>
+                      )}
+                      {card.tag && (
+                        <span
+                          className={`text-[11px] font-medium ${
+                            darkMode ? 'text-[#8E968C]' : 'text-[#7C7568]'
+                          }`}
+                        >
+                          {card.tag}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <h2 className="text-base font-semibold leading-snug">

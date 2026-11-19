@@ -65,6 +65,10 @@ const LABELS_SV: Record<string, string> = {
   finans: "Finans & trygghet",
   finance: "Finans & trygghet",
   overall: "Övergripande kompassindex",
+  b2b_self_leadership: "Självledarskap & Rollklarhet",
+  b2b_team_trust: "Samarbete & Psykologisk Trygghet",
+  b2b_sustainable_energy: "Hållbar Energi & Belastningsbalans",
+  b2b_direction_culture: "Strategisk Riktning & Gemensam Kompass",
 };
 
 function formatLabel(key: string): string {
@@ -689,6 +693,32 @@ export default function B2BPortalPage() {
                 {redeemLoading ? "Aktiverar..." : "Aktivera kod"}
               </button>
             </form>
+
+            <div className="pt-4 border-t border-[#4E5C4B]/15 space-y-2.5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4E5C4B]">
+                Dina individuella B2B-verktyg
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="/?segment=b2b&view=calibration"
+                  className="px-3.5 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+                >
+                  Kalibrera B2B-kompasser
+                </a>
+                <a
+                  href="/?segment=b2b&view=library"
+                  className="px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+                >
+                  B2B-biblioteket
+                </a>
+                <a
+                  href="/?segment=b2b&b2b_level=individual"
+                  className="px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+                >
+                  Samtala med FALK
+                </a>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -715,6 +745,116 @@ export default function B2BPortalPage() {
                   </p>
                 </div>
               )}
+            </section>
+
+            {/* B2B-kompasser, Bibliotek & FALK på individ-, lednings- och företagsnivå */}
+            <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+              <div className="border-b border-[#4E5C4B]/10 pb-4">
+                <p className="text-xs uppercase tracking-[0.15em] text-[#4E5C4B] font-semibold">
+                  Wayjs Workplace Navigation
+                </p>
+                <h2 className="text-lg font-semibold text-[#1C211B] mt-1">
+                  B2B-kompasser, Bibliotek &amp; Samtal med FALK
+                </h2>
+                <p className="text-xs text-[#4E5C4B] mt-0.5">
+                  Riktning före tempo – arbeta med självledarskap, kommunikation, stresshantering och effektivisering på tre nivåer.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Individnivå */}
+                <div className="bg-[#E8DCC4]/55 border border-[#4E5C4B]/15 rounded-xl p-5 flex flex-col justify-between space-y-4">
+                  <div className="space-y-1.5">
+                    <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4E5C4B]">
+                      Nivå 1 &middot; Individ
+                    </span>
+                    <h3 className="text-base font-semibold text-[#1C211B]">
+                      Medarbetare &amp; Ledare
+                    </h3>
+                    <p className="text-xs text-[#1C211B]/85 leading-relaxed">
+                      Kalibrera dina fyra B2B-kompasser, gör guidade övningar eller för ett konfidentiellt reflektionssamtal med FALK.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-1">
+                    <a
+                      href="/?segment=b2b&view=calibration"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+                    >
+                      Kalibrera B2B-kompasser
+                    </a>
+                    <a
+                      href="/?segment=b2b&view=library"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#F7F2E8] transition"
+                    >
+                      Öppna B2B-biblioteket (8 övningar)
+                    </a>
+                    <a
+                      href="/?segment=b2b&b2b_level=individual"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#F7F2E8] transition"
+                    >
+                      Samtala med FALK (Individ)
+                    </a>
+                  </div>
+                </div>
+
+                {/* 2. Ledningsnivå */}
+                <div className="bg-[#E8DCC4]/55 border border-[#4E5C4B]/15 rounded-xl p-5 flex flex-col justify-between space-y-4">
+                  <div className="space-y-1.5">
+                    <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4E5C4B]">
+                      Nivå 2 &middot; Ledning
+                    </span>
+                    <h3 className="text-base font-semibold text-[#1C211B]">
+                      Chef &amp; Ledningsgrupp
+                    </h3>
+                    <p className="text-xs text-[#1C211B]/85 leading-relaxed">
+                      Fågelperspektiv över teamdynamik, mandat och psykologisk trygghet – med full individsekretess.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-1">
+                    <a
+                      href="/?segment=b2b&b2b_level=leadership"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+                    >
+                      Bjud in FALK till ledningssamtal
+                    </a>
+                    <a
+                      href="/?segment=b2b&view=library"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#F7F2E8] transition"
+                    >
+                      Övningar för ledarskap &amp; kommunikation
+                    </a>
+                  </div>
+                </div>
+
+                {/* 3. Företagsnivå */}
+                <div className="bg-[#E8DCC4]/55 border border-[#4E5C4B]/15 rounded-xl p-5 flex flex-col justify-between space-y-4">
+                  <div className="space-y-1.5">
+                    <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4E5C4B]">
+                      Nivå 3 &middot; Företag
+                    </span>
+                    <h3 className="text-base font-semibold text-[#1C211B]">
+                      Organisation &amp; Kultur
+                    </h3>
+                    <p className="text-xs text-[#1C211B]/85 leading-relaxed">
+                      Systemperspektiv på kultur, hållbar energi och gemensam kompass utifrån anonymiserat gruppunderlag.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-1">
+                    <a
+                      href="/?segment=b2b&b2b_level=company"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+                    >
+                      Bjud in FALK till organisationssamtal
+                    </a>
+                    <a
+                      href="/?segment=b2b&view=library"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#F7F2E8] transition"
+                    >
+                      Övningar för stresshantering &amp; flöde
+                    </a>
+                  </div>
+                </div>
+              </div>
             </section>
 
             {/* Aggregerad kompassanalys */}
