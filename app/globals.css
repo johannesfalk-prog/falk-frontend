@@ -65,3 +65,26 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(78, 92, 75, 0.45);
 }
+
+@keyframes falk-wave {
+  0%, 60%, 100% {
+    transform: translateY(0) scale(0.92);
+    opacity: 0.38;
+  }
+  30% {
+    transform: translateY(-3.5px) scale(1.06);
+    opacity: 1;
+  }
+}
+
+.falk-wave-dot {
+  animation: falk-wave 1.6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .falk-wave-dot {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    transform: none;
+  }
+}

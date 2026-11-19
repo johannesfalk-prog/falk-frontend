@@ -53,6 +53,9 @@ interface ActionModalsProps {
   currentSessionId?: string | null;
   feedbackSentiment?: 'positive' | 'negative';
   paywallReason?: string;
+  // Återställning av lösenord via e-postlänk
+  isPasswordRecovery?: boolean;
+  onPasswordRecoveryComplete?: () => void;
   // Callbacks för att uppdatera listor efter sparande
   onDataSaved?: () => Promise<void>;
 }
@@ -73,6 +76,8 @@ export default function ActionModals({
   currentSessionId = null,
   feedbackSentiment = 'positive',
   paywallReason = 'Lås upp hela FALK med ett Premium-medlemskap.',
+  isPasswordRecovery = false,
+  onPasswordRecoveryComplete,
   onDataSaved,
 }: ActionModalsProps) {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5001';
@@ -83,9 +88,11 @@ export default function ActionModals({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Auth / Paywall state
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'recovery'>('register');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [isAdultConfirmed, setIsAdultConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -141,8 +148,27 @@ export default function ActionModals({
   // Settings / GDPR state
   const [settingsName, setSettingsName] = useState(displayName);
   const [settingsEmail, setSettingsEmail] = useState(userEmail);
+  const [settingsNewPassword, setSettingsNewPassword] = useState('');
+  const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+        setNewPasswordInput('');
+        setConfirmPasswordInput('');
+        setAuthMode('recovery');
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Synka fält när modal öppnas
   useEffect(() => {
@@ -151,7 +177,13 @@ export default function ActionModals({
     setLoading(false);
 
     if (activeModal === 'paywall' || activeModal === 'auth') {
-      setAuthMode(activeModal === 'auth' ? 'login' : 'register');
+      if (isPasswordRecovery) {
+        setAuthMode('recovery');
+        setNewPasswordInput('');
+        setConfirmPasswordInput('');
+      } else {
+        setAuthMode(activeModal === 'auth' ? 'login' : 'register');
+      }
       setShowLegalDoc(null);
       setKeepLoggedIn(false);
     }
@@ -179,11 +211,13 @@ export default function ActionModals({
     if (activeModal === 'settings') {
       setSettingsName(displayName);
       setSettingsEmail(userEmail);
+      setSettingsNewPassword('');
+      setSettingsConfirmPassword('');
       setShowDeleteConfirm(false);
       setDeleteConfirmText('');
       setShowLegalDoc(null);
     }
-  }, [activeModal, selectedMessageContent, displayName, userEmail]);
+  }, [activeModal, selectedMessageContent, displayName, userEmail, isPasswordRecovery]);
 
   if (!activeModal) return null;
 
@@ -281,6 +315,7 @@ export default function ActionModals({
   const openBillingPortal = async () => {
     setLoading(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(`${backendUrl}/api/billing/portal`, {
@@ -290,8 +325,25 @@ export default function ActionModals({
           return_url: window.location.origin,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) {
+        const rawErr = String(data.error || data.message || '').toLowerCase();
+        const isNoStripeCustomer =
+          res.status === 400 ||
+          res.status === 404 ||
+          rawErr.includes('stripe') ||
+          rawErr.includes('customer') ||
+          rawErr.includes('kund') ||
+          rawErr.includes('subscription') ||
+          rawErr.includes('prenumeration') ||
+          rawErr.includes('saknas');
+        if (isNoStripeCustomer) {
+          setSuccessMsg(
+            'Ditt Premium-medlemskap är aktiverat via VIP-/kampanjkod utan kopplat betalkort i Stripe. Du behöver inte hantera någon betalningsmetod.'
+          );
+          setLoading(false);
+          return;
+        }
         throw new Error(data.error || 'Kunde inte öppna kundportalen.');
       }
       window.location.href = data.url;
@@ -629,16 +681,91 @@ export default function ActionModals({
     }
   };
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
+  const handlePasswordResetRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
+    const cleanEmail = emailInput.trim();
+    if (!cleanEmail) {
+      setErrorMsg('Fyll i din e-postadress för att återställa lösenordet.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+      });
+      if (error) throw error;
+      setSuccessMsg(
+        'Om det finns ett konto kopplat till adressen har vi skickat en återställningslänk. Kontrollera din inkorg och skräppost.'
+      );
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Kunde inte skicka återställningslänk just nu.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    if (newPasswordInput.length < 6) {
+      setErrorMsg('Det nya lösenordet måste vara minst 6 tecken.');
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setErrorMsg('Lösenorden matchar inte. Kontrollera båda fälten.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPasswordInput,
+      });
+      if (error) throw error;
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+      onPasswordRecoveryComplete?.();
+      await onAuthSuccess();
+      setSuccessMsg('Ditt lösenord har uppdaterats!');
+      setTimeout(() => onClose(), 900);
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Kunde inte uppdatera lösenordet. Begär en ny länk.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const wantsPasswordChange = Boolean(settingsNewPassword || settingsConfirmPassword);
+    if (wantsPasswordChange) {
+      if (settingsNewPassword.length < 6) {
+        setErrorMsg('Nytt lösenord måste innehålla minst 6 tecken.');
+        return;
+      }
+      if (settingsNewPassword !== settingsConfirmPassword) {
+        setErrorMsg('Lösenorden matchar inte. Kontrollera båda lösenordsfälten.');
+        return;
+      }
+    }
+
+    setLoading(true);
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Ingen aktiv session.');
+
+      const updates: string[] = [];
 
       if (settingsName.trim() !== displayName) {
         const { error: profErr } = await supabase
@@ -646,17 +773,37 @@ export default function ActionModals({
           .update({ display_name: settingsName.trim() })
           .eq('user_id', user.id);
         if (profErr) throw profErr;
+        updates.push('Användarnamn uppdaterat.');
       }
 
       if (settingsEmail.trim() && settingsEmail.trim() !== userEmail) {
-        const { error: emailErr } = await supabase.auth.updateUser({
-          email: settingsEmail.trim(),
-        });
+        const { error: emailErr } = await supabase.auth.updateUser(
+          { email: settingsEmail.trim() },
+          {
+            emailRedirectTo:
+              typeof window !== 'undefined' ? window.location.origin : undefined,
+          }
+        );
         if (emailErr) throw emailErr;
+        updates.push(
+          'Bekräftelselänk för ny e-postadress har skickats till din inkorg (kontrollera även skräppost) – öppna länken för att slutföra bytet.'
+        );
+      }
+
+      if (wantsPasswordChange) {
+        const { error: passErr } = await supabase.auth.updateUser({
+          password: settingsNewPassword,
+        });
+        if (passErr) throw passErr;
+        setSettingsNewPassword('');
+        setSettingsConfirmPassword('');
+        updates.push('Lösenordet har ändrats.');
       }
 
       await onAuthSuccess();
-      setSuccessMsg('Profiluppgifter uppdaterade.');
+      setSuccessMsg(
+        updates.length > 0 ? updates.join(' ') : 'Inga ändringar att spara.'
+      );
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Kunde inte uppdatera profil.');
     } finally {
@@ -756,19 +903,111 @@ export default function ActionModals({
           <div>
             <div className="mb-4 flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C57B57]/15 text-[#C57B57]">
-                {activeModal === 'paywall' ? <Lock className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                {authMode === 'recovery' || authMode === 'forgot' ? (
+                  <Lock className="h-5 w-5" />
+                ) : activeModal === 'paywall' ? (
+                  <Lock className="h-5 w-5" />
+                ) : (
+                  <Sparkles className="h-5 w-5" />
+                )}
               </div>
               <div>
                 <h2 className="text-lg font-semibold">
-                  {activeModal === 'paywall' ? 'Fortsätt din resa med FALK' : 'Ditt FALK-konto'}
+                  {authMode === 'recovery'
+                    ? 'Välj nytt lösenord'
+                    : authMode === 'forgot'
+                    ? 'Återställ lösenord'
+                    : activeModal === 'paywall'
+                    ? 'Fortsätt din resa med FALK'
+                    : 'Ditt FALK-konto'}
                 </h2>
                 <p className={`text-xs ${subText}`}>
-                  {activeModal === 'paywall' ? paywallReason : 'Logga in eller skapa ett konto (18+).'}
+                  {authMode === 'recovery'
+                    ? 'Ange ett nytt lösenord för ditt FALK-konto (minst 6 tecken).'
+                    : authMode === 'forgot'
+                    ? 'Ange din e-postadress så skickar vi en återställningslänk.'
+                    : activeModal === 'paywall'
+                    ? paywallReason
+                    : 'Logga in eller skapa ett konto (18+).'}
                 </p>
               </div>
             </div>
 
-            {!isGuest && !isPremium ? (
+            {authMode === 'recovery' ? (
+              <form onSubmit={handlePasswordRecoverySubmit} className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium">Nytt lösenord</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Minst 6 tecken"
+                    className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${inputBg}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium">Bekräfta nytt lösenord</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    value={confirmPasswordInput}
+                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                    placeholder="Upprepa lösenordet"
+                    className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${inputBg}`}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-2 w-full rounded-xl bg-[#4E5C4B] py-2.5 text-sm font-medium text-white hover:bg-[#3f4b3c] transition disabled:opacity-50"
+                >
+                  {loading ? 'Sparar...' : 'Spara nytt lösenord'}
+                </button>
+              </form>
+            ) : authMode === 'forgot' ? (
+              <form onSubmit={handlePasswordResetRequest} className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium">E-postadress</label>
+                  <input
+                    type="email"
+                    required
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="namn@exempel.se"
+                    className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${inputBg}`}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-2 w-full rounded-xl bg-[#4E5C4B] py-2.5 text-sm font-medium text-white hover:bg-[#3f4b3c] transition disabled:opacity-50"
+                >
+                  {loading ? 'Skickar...' : 'Skicka återställningslänk'}
+                </button>
+
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                      setAuthMode('login');
+                    }}
+                    className="text-xs font-medium underline underline-offset-2 opacity-80 hover:opacity-100"
+                  >
+                    ← Tillbaka till inloggning
+                  </button>
+                </div>
+              </form>
+            ) : !isGuest && !isPremium ? (
               <div className="space-y-4">
                 <div className="rounded-xl border border-[#C57B57]/40 bg-[#C57B57]/10 p-4 text-sm">
                   <p className="font-medium mb-1">Du är inloggad som {userEmail}</p>
@@ -864,7 +1103,22 @@ export default function ActionModals({
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-medium">Lösenord</label>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="block text-xs font-medium">Lösenord</label>
+                      {authMode === 'login' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErrorMsg(null);
+                            setSuccessMsg(null);
+                            setAuthMode('forgot');
+                          }}
+                          className="text-xs font-medium text-[#C57B57] underline underline-offset-2 hover:opacity-80"
+                        >
+                          Glömt lösenord?
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="password"
                       required
@@ -1322,12 +1576,38 @@ export default function ActionModals({
                     className={`rounded-xl border px-3 py-1.5 text-sm outline-none ${inputBg}`}
                   />
                 </div>
+                <p className={`text-[11px] ${subText}`}>
+                  Vid ändring av e-postadress skickas en bekräftelselänk till inkorgen innan adressen byts.
+                </p>
+                <div className="pt-1 border-t border-[#D8CCB8]/40 space-y-2">
+                  <p className={`text-xs font-medium ${subText}`}>Byt lösenord (valfritt)</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="password"
+                      minLength={6}
+                      autoComplete="new-password"
+                      value={settingsNewPassword}
+                      onChange={(e) => setSettingsNewPassword(e.target.value)}
+                      placeholder="Nytt lösenord (minst 6 tecken)"
+                      className={`rounded-xl border px-3 py-1.5 text-sm outline-none ${inputBg}`}
+                    />
+                    <input
+                      type="password"
+                      minLength={6}
+                      autoComplete="new-password"
+                      value={settingsConfirmPassword}
+                      onChange={(e) => setSettingsConfirmPassword(e.target.value)}
+                      placeholder="Bekräfta nytt lösenord"
+                      className={`rounded-xl border px-3 py-1.5 text-sm outline-none ${inputBg}`}
+                    />
+                  </div>
+                </div>
                 <button
                   type="submit"
                   disabled={loading}
                   className="rounded-xl bg-[#4E5C4B] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#3f4b3c] disabled:opacity-50"
                 >
-                  Spara ändringar
+                  {loading ? 'Sparar...' : 'Spara ändringar'}
                 </button>
               </form>
             )}
