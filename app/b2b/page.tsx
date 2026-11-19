@@ -1276,6 +1276,65 @@ export default function B2BPortalPage() {
             </section>
           </>
         )}
+      
+        {/* B2B LEDARSKAPS- & TEAMKOMPASS (FALK BIBLE KAP. 5 – STRIKT K-ANONYMITET) */}
+        <section className="mt-8 rounded-2xl border border-[#DFD4BE] bg-[#FAF7F0] p-6 shadow-xs text-[#1C1C1C]">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#C57B57]">
+                WAYJS B2B • AGGREGERAD TEAMKOMPASS™
+              </span>
+              <h2 className="text-lg font-bold mt-0.5">
+                Ledarskap &amp; Teamriktning (k-anonymiserad översikt)
+              </h2>
+            </div>
+            <span className="text-xs px-3 py-1 rounded-full bg-[#4E5C4B]/15 text-[#4E5C4B] font-medium">
+              🔒 Integritetsskyddad (k ≥ 5)
+            </span>
+          </div>
+
+          <p className="text-sm text-[#4A4740] leading-relaxed mb-5">
+            Visar teamets samlade rörelse över de fyra kompassområdena utan att någonsin exponera enskilda medarbetares samtal, journaler eller individuella svar.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            {[
+              { area: "Riktning", desc: "Tydlighet i syfte, prioriteringar och gemensam nordstjärna.", focus: "Strategisk klarhet" },
+              { area: "Balans", desc: "Hållbart tempo, återhämtning och hantering av arbetsbelastning.", focus: "Hållbar energi" },
+              { area: "Handling", desc: "Förmåga att omsätta beslut i konkreta, små steg i vardagen.", focus: "Genomförandekraft" },
+              { area: "Reflektion", desc: "Psykologisk trygghet, lärande och perspektivskifte i teamet.", focus: "Lärandekultur" },
+            ].map((item) => (
+              <div
+                key={item.area}
+                className="rounded-xl border border-[#DFD4BE] bg-white/80 p-4 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[#4E5C4B]">
+                    {item.area}
+                  </div>
+                  <p className="text-xs text-[#4A4740] mt-1.5 leading-relaxed">
+                    {item.desc}
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-[#EFE7D6] text-[11px] font-medium text-[#C57B57]">
+                  Fokus: {item.focus}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-xl bg-[#F2ECE0] border border-[#DFD4BE] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-xs text-[#3A3730] leading-relaxed">
+              <strong>K-anonymitetsgaranti:</strong> Teamindex aktiveras automatiskt först när minst 5 unika teammedlemmar genomfört kompasskalibrering eller veckoreflektion under perioden. Inga rådata kan härledas till individ.
+            </div>
+            <a
+              href="/?session=stora_beslut"
+              className="shrink-0 px-4 py-2 rounded-xl bg-[#4E5C4B] hover:bg-[#3F4B3D] text-white text-xs font-medium transition text-center"
+            >
+              Öppna Ledarskapsreflektion i FALK →
+            </a>
+          </div>
+        </section>
       </main>
     </div>
   );

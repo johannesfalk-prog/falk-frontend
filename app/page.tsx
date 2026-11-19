@@ -84,6 +84,17 @@ export default function FalkHomePage() {
   const [isLeftOpen, setIsLeftOpen] = useState(false);
   const [isRightOpen, setIsRightOpen] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(true);
+  const [sessionMode, setSessionMode] = useState<string | null>(null);
+  const [showSessionsDrawer, setShowSessionsDrawer] = useState(false);
+
+  const COMPASS_SESSION_OPTIONS = [
+    { id: "hitta_riktning", title: "Hitta riktning", duration: "15 min", desc: "När livet känns oklart och du vill kalibrera din kompass." },
+    { id: "stora_beslut", title: "Stora beslut", duration: "30 min", desc: "Utforska ett vägval genom värderingar och andra ordningens konsekvenser." },
+    { id: "relationer_fokus", title: "Relationer i fokus", duration: "30 min", desc: "När kommunikationen kärvar och du vill se nya perspektiv." },
+    { id: "aterhamta_balansen", title: "Återhämta balansen", duration: "15 min", desc: "När stress och krav tar över och du behöver landa." },
+    { id: "bygg_en_vana", title: "Bygg en vana", duration: "15 min", desc: "Skapa hållbar förändring genom identitet och små steg." },
+    { id: "veckoreflektion", title: "Veckoreflektion", duration: "30 min", desc: "Fågelperspektiv över veckan som gått och riktning framåt." },
+  ] as const;
 
   // Auth & användarprofil
   const [userId, setUserId] = useState<string | null>(null);
@@ -98,6 +109,7 @@ export default function FalkHomePage() {
 
   // Modaler
   const [activeModal, setActiveModal] = useState<ActiveModalType>(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [paywallReason, setPaywallReason] = useState(
     'Lås upp hela FALK med ett Premium-medlemskap.'
   );
@@ -536,7 +548,11 @@ export default function FalkHomePage() {
     loadUserData();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+        setActiveModal('auth');
+      }
       loadUserData();
     });
     return () => {
@@ -627,6 +643,7 @@ export default function FalkHomePage() {
     }
     setActiveConversationId(null);
     setMessages([]);
+    setSessionMode(null);
     setShowWelcomeCard(true);
     setActiveView('chat');
     setIsLeftOpen(false);
@@ -815,8 +832,13 @@ export default function FalkHomePage() {
 
     try {
       const headers = await getAuthHeaders();
+      const isFinalCompassTrigger =
+        text.startsWith("Avsluta med The Final Compass") ||
+        text.includes("[FINAL_COMPASS]");
       const payload = {
         message: text,
+        session_mode: sessionMode || undefined,
+        final_compass: isFinalCompassTrigger || undefined,
         conversation_id: activeConversationId,
         session_id: activeConversationId,
         focus_sliders: focusSliders,
@@ -1305,6 +1327,71 @@ export default function FalkHomePage() {
               </section>
             )}
 
+            {/* COMPASS SESSIONS™ (GUIDADE MENTORSESSIONER – FALK BIBLE KAP. 6) */}
+            {!activeConversationId && messages.length === 0 && (
+              <div className="mb-5">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowSessionsDrawer((v) => !v)}
+                    className={`text-xs font-semibold tracking-wider uppercase flex items-center gap-1.5 transition ${
+                      darkMode ? "text-[#C57B57] hover:text-[#E8DCC4]" : "text-[#4E5C4B] hover:opacity-80"
+                    }`}
+                  >
+                    <span>🧭 Compass Sessions™ (Guidade mentorsessioner)</span>
+                    <span>{showSessionsDrawer ? "▲" : "▼"}</span>
+                  </button>
+                  {sessionMode && (
+                    <button
+                      type="button"
+                      onClick={() => setSessionMode(null)}
+                      className="text-xs underline opacity-75 hover:opacity-100"
+                    >
+                      Avsluta sessionsläge
+                    </button>
+                  )}
+                </div>
+
+                {showSessionsDrawer && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2">
+                    {COMPASS_SESSION_OPTIONS.map((opt) => {
+                      const active = sessionMode === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            if (isGuest) {
+                              openPaywall("Compass Sessions™ är en guidad mentorfunktion för Premium-medlemmar.");
+                              return;
+                            }
+                            setSessionMode(opt.id);
+                            setShowWelcomeCard(false);
+                            handleSendMessage(`Jag vill starta en guidad Compass Session: ${opt.title} (${opt.duration}).`);
+                          }}
+                          className={`text-left p-3.5 rounded-2xl border transition ${
+                            active
+                              ? "border-[#C57B57] bg-[#C57B57]/15"
+                              : darkMode
+                              ? "border-[#383630] bg-[#23221F] hover:border-[#C57B57]/60"
+                              : "border-[#DFD4BE] bg-[#FAF7F0] hover:border-[#4E5C4B]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sm">{opt.title}</span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#4E5C4B]/15 text-[#4E5C4B] dark:text-[#A8BFA1]">
+                              {opt.duration}
+                            </span>
+                          </div>
+                          <p className="text-xs opacity-80 mt-1 leading-relaxed">{opt.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 9 ONBOARDINGKORT (VISAS INNAN FÖRSTA MEDDELANDET) */}
             {!activeConversationId && messages.length === 0 && (
               <section className="space-y-2.5 mb-6">
@@ -1335,6 +1422,37 @@ export default function FalkHomePage() {
               </section>
             )}
 
+            {/* AKTIV COMPASS SESSION & THE FINAL COMPASS™ (FALK BIBLE KAP. 4 & 6) */}
+            {messages.length > 0 && (sessionMode || messages.filter((m) => m.sender === "user").length >= 3) && (
+              <div className="mb-3 px-1 flex flex-wrap items-center justify-between gap-2">
+                {sessionMode ? (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-[#4E5C4B]/15 text-[#4E5C4B] dark:text-[#A8BFA1] font-medium">
+                    🧭 Aktiv Compass Session: {COMPASS_SESSION_OPTIONS.find((o) => o.id === sessionMode)?.title || sessionMode}
+                  </span>
+                ) : (
+                  <span />
+                )}
+                {!isGuest && messages.filter((m) => m.sender === "user").length >= 3 && (
+                  <button
+                    type="button"
+                    disabled={isSending}
+                    onClick={() =>
+                      handleSendMessage(
+                        "Avsluta med The Final Compass™: sammanfatta vad vi har förstått, vad som verkar viktigast, vilket perspektiv som saknades från början, vad som känns mest sant för mig nu och vad mitt nästa steg blir."
+                      )
+                    }
+                    className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                      darkMode
+                        ? "border-[#C57B57]/50 text-[#E8DCC4] hover:bg-[#C57B57]/20"
+                        : "border-[#4E5C4B]/40 text-[#4E5C4B] bg-[#FAF7F0] hover:bg-[#4E5C4B] hover:text-white"
+                    }`}
+                  >
+                    🧭 Avsluta med The Final Compass™
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* CHATTFLÖDE */}
             <div className="space-y-6">
               {messages.map((msg, idx) => {
@@ -1354,6 +1472,10 @@ export default function FalkHomePage() {
                       </div>
                     </div>
                   );
+                }
+
+                if (isSending && !displayContent?.trim()) {
+                  return null;
                 }
 
                 return (
@@ -1693,7 +1815,10 @@ export default function FalkHomePage() {
                 );
               })}
 
-              {isSending && (
+              {isSending &&
+                (messages.length === 0 ||
+                  messages[messages.length - 1]?.sender === 'user' ||
+                  !messages[messages.length - 1]?.content?.trim()) && (
                 <div className="flex flex-col items-start">
                   <span className="text-[11px] font-semibold tracking-widest uppercase mb-1.5 ml-1 opacity-60">
                     FALK
@@ -1705,7 +1830,20 @@ export default function FalkHomePage() {
                         : 'bg-white border-[#E4DAC7] text-[#6E675C]'
                     }`}
                   >
-                    FALK reflekterar...
+                    <span className="inline-flex items-center gap-1.5 py-1" role="status" aria-label="FALK reflekterar">
+                      <span
+                        className={`h-2 w-2 rounded-full falk-wave-dot ${darkMode ? 'bg-[#A8B0A2]' : 'bg-[#4E5C4B]'}`}
+                        style={{ animationDelay: '0ms' }}
+                      />
+                      <span
+                        className={`h-2 w-2 rounded-full falk-wave-dot ${darkMode ? 'bg-[#A8B0A2]' : 'bg-[#4E5C4B]'}`}
+                        style={{ animationDelay: '180ms' }}
+                      />
+                      <span
+                        className={`h-2 w-2 rounded-full falk-wave-dot ${darkMode ? 'bg-[#A8B0A2]' : 'bg-[#4E5C4B]'}`}
+                        style={{ animationDelay: '360ms' }}
+                      />
+                    </span>
                   </div>
                 </div>
               )}
@@ -2073,7 +2211,12 @@ export default function FalkHomePage() {
       {/* ALLA ACTIONMODALER (PAYWALL, AUTH 18+, FEEDBACK, PÅMINNELSE, INSIKT, MÅL, INSTÄLLNINGAR/GDPR) */}
       <ActionModals
         activeModal={activeModal}
-        onClose={() => setActiveModal(null)}
+        isPasswordRecovery={isPasswordRecovery}
+        onPasswordRecoveryComplete={() => setIsPasswordRecovery(false)}
+        onClose={() => {
+          setIsPasswordRecovery(false);
+          setActiveModal(null);
+        }}
         isGuest={isGuest}
         isPremium={isPremium}
         userEmail={userEmail}
