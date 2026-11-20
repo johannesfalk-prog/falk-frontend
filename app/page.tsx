@@ -108,6 +108,13 @@ export default function FalkHomePage() {
   const [guestUuid, setGuestUuid] = useState('');
   const [guestMessageCount, setGuestMessageCount] = useState(0);
 
+  // Web Push & In-app-larm för påminnelser
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [dismissedPushBanner, setDismissedPushBanner] = useState(false);
+  const [activeDueReminder, setActiveDueReminder] = useState<DrawerReminder | null>(null);
+  const triggeredAlarmIdsRef = useRef<Set<string>>(new Set());
+
   const isGuest = !userId;
   const userTier: UserTier = isGuest ? 'guest' : isPremium ? 'premium' : 'free';
 
@@ -800,6 +807,150 @@ export default function FalkHomePage() {
     setMessages([falkSummaryMsg]);
   };
 
+  // Hjälpfunktion: konvertera VAPID base64url till Uint8Array
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // Registrera /sw.js och synka Web Push-prenumeration med backend
+  const registerWebPushSubscription = useCallback(async (requestPermissionIfDefault = false) => {
+    if (typeof window === 'undefined' || isGuest || !isPremium) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushPermission('unsupported');
+      return;
+    }
+    try {
+      let perm: NotificationPermission = Notification.permission;
+      if (perm === 'default' && requestPermissionIfDefault) {
+        perm = await Notification.requestPermission();
+      }
+      setPushPermission(perm);
+      if (perm !== 'granted') return;
+
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+
+      const headers = await getAuthHeaders();
+      const keyRes = await fetch(`${backendUrl}/api/push/vapid-public-key`, { headers });
+      if (!keyRes.ok) return;
+      const keyJson = await keyRes.json().catch(() => ({}));
+      const publicKey = keyJson?.public_key || keyJson?.vapid_public_key;
+      if (!publicKey) return;
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      const subJson = sub.toJSON();
+      const saveRes = await fetch(`${backendUrl}/api/push/subscribe`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          endpoint: subJson.endpoint,
+          keys: subJson.keys,
+          user_agent: navigator.userAgent,
+        }),
+      });
+      if (saveRes.ok) {
+        setPushSubscribed(true);
+      }
+    } catch {
+      // Tyst fallback till in-app-larm om webbläsaren blockerar push
+    }
+  }, [backendUrl, isGuest, isPremium]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('Notification' in window)) {
+      setPushPermission('unsupported');
+      return;
+    }
+    setPushPermission(Notification.permission);
+    try {
+      const saved = JSON.parse(localStorage.getItem('falk_triggered_alarms') || '[]');
+      if (Array.isArray(saved)) {
+        triggeredAlarmIdsRef.current = new Set(saved.map(String));
+      }
+    } catch {}
+    if (!isGuest && isPremium && Notification.permission === 'granted') {
+      registerWebPushSubscription(false);
+    }
+  }, [isGuest, isPremium, registerWebPushSubscription]);
+
+  // Spela en mjuk, lugn FALK-klang vid in-app-larm
+  const playSoftReminderChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      [523.25, 659.25].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.18);
+        gain.gain.setValueAtTime(0.001, now + idx * 0.18);
+        gain.gain.exponentialRampToValueAtTime(0.08, now + idx * 0.18 + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.18 + 0.55);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.18);
+        osc.stop(now + idx * 0.18 + 0.6);
+      });
+    } catch {}
+  };
+
+  // Bevaka förfallna påminnelser i realtid (in-app-larm var 20:e sekund)
+  useEffect(() => {
+    if (isGuest || !isPremium || reminders.length === 0) return;
+
+    const checkDueReminders = () => {
+      const nowMs = Date.now();
+      for (const r of reminders) {
+        const raw = r as unknown as Record<string, unknown>;
+        const rawTime = raw.remind_at || raw.due_at || raw.scheduled_for;
+        if (!rawTime) continue;
+        const dueMs = new Date(String(rawTime)).getTime();
+        if (Number.isNaN(dueMs)) continue;
+        const remId = String(raw.id || dueMs);
+        if (dueMs <= nowMs && nowMs - dueMs < 24 * 60 * 60 * 1000 && !triggeredAlarmIdsRef.current.has(remId)) {
+          triggeredAlarmIdsRef.current.add(remId);
+          try {
+            localStorage.setItem('falk_triggered_alarms', JSON.stringify(Array.from(triggeredAlarmIdsRef.current).slice(-100)));
+          } catch {}
+          setActiveDueReminder(r);
+          playSoftReminderChime();
+          const bodyText = String(raw.title || raw.context || raw.note || 'Dags för din reflektion eller ditt nästa steg.');
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('FALK – Påminnelse', {
+                body: bodyText,
+                icon: '/favicon.ico',
+                tag: `falk-inapp-${remId}`,
+              });
+            } catch {}
+          }
+          break;
+        }
+      }
+    };
+
+    checkDueReminders();
+    const interval = window.setInterval(checkDueReminders, 20000);
+    return () => window.clearInterval(interval);
+  }, [isGuest, isPremium, reminders]);
+
   // Skicka meddelande till FALK
   const handleSendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? inputText).trim();
@@ -841,6 +992,7 @@ export default function FalkHomePage() {
         text.includes("[FINAL_COMPASS]");
       const payload = {
         message: text,
+        display_name: displayName.trim() || undefined,
         session_mode: sessionMode || undefined,
         final_compass: isFinalCompassTrigger || undefined,
         conversation_id: activeConversationId,
@@ -1193,7 +1345,7 @@ export default function FalkHomePage() {
     >
       {/* HEADER */}
       <header
-        className={`sticky top-0 z-30 border-b px-4 sm:px-6 pt-[env(safe-area-inset-top,0px)] h-[calc(4rem+env(safe-area-inset-top,0px))] flex items-center justify-between ${
+        className={`fixed top-0 left-0 right-0 z-30 border-b px-4 sm:px-6 pt-[env(safe-area-inset-top,0px)] h-[calc(4rem+env(safe-area-inset-top,0px))] flex items-center justify-between ${
           darkMode
             ? 'bg-[#181715]/95 border-[#32302B] text-[#F5EFE6]'
             : 'bg-[#E8DCC4]/95 border-[#D5C7AC] text-[#111111]'
@@ -1261,7 +1413,89 @@ export default function FalkHomePage() {
       </header>
 
       {/* HUVUDINNEHÅLL */}
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-6 pb-44 flex flex-col">
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] pb-44 flex flex-col">
+        {/* IN-APP-LARM FÖR FÖRFALLEN PÅMINNELSE */}
+        {activeDueReminder && (() => {
+          const dueRaw = activeDueReminder as unknown as Record<string, unknown>;
+          const dueTitle = String(dueRaw.title || dueRaw.context || dueRaw.note || 'Du har en planerad påminnelse.');
+          const dueSub = dueRaw.title && (dueRaw.context || dueRaw.note) ? String(dueRaw.context || dueRaw.note) : '';
+          return (
+            <div
+              role="alert"
+              className={`mb-4 rounded-2xl p-4 border shadow-md flex items-start justify-between gap-3 transition ${
+                darkMode
+                  ? 'bg-[#23221F] border-[#C57B57] text-[#F5EFE6]'
+                  : 'bg-[#FAF7F0] border-[#C57B57] text-[#1C1C1C]'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 p-2 rounded-xl bg-[#C57B57]/15 text-[#C57B57]">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#C57B57]">
+                    Påminnelse från FALK
+                  </div>
+                  <p className="text-sm font-medium mt-0.5">{dueTitle}</p>
+                  {dueSub && <p className="text-xs opacity-75 mt-0.5">{dueSub}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDueReminder(null);
+                    setIsRightOpen(true);
+                  }}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4E5C4B] text-white hover:opacity-90 transition"
+                >
+                  Visa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveDueReminder(null)}
+                  aria-label="Stäng larm"
+                  className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* DISKRET INBJUDAN ATT AKTIVERA BAKGRUNDS-PUSH NÄR PÅMINNELSER FINNS */}
+        {!isGuest && isPremium && reminders.length > 0 && pushPermission === 'default' && !pushSubscribed && !dismissedPushBanner && (
+          <div
+            className={`mb-4 rounded-2xl px-4 py-3 border flex flex-wrap items-center justify-between gap-2 text-xs ${
+              darkMode
+                ? 'bg-[#23221F] border-[#383630] text-[#E8DCC4]'
+                : 'bg-[#FAF7F0] border-[#DFD4BE] text-[#1C1C1C]'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Bell className="w-3.5 h-3.5 text-[#C57B57] shrink-0" />
+              <span>Vill du få påminnelser från FALK även när appen är stängd?</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => registerWebPushSubscription(true)}
+                className="px-3 py-1 rounded-full bg-[#4E5C4B] text-white font-medium hover:opacity-90 transition"
+              >
+                Aktivera notiser
+              </button>
+              <button
+                type="button"
+                onClick={() => setDismissedPushBanner(true)}
+                aria-label="Avfärda"
+                className="opacity-60 hover:opacity-100 p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
         {activeView === 'chat' && (
           <>
             {/* VÄLKOMSTKORT + KOMPASSKALIBRERING */}
@@ -1313,20 +1547,7 @@ export default function FalkHomePage() {
                     Starta Kompasskalibrering™ →
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCalibrationView('overview');
-                      setIsCalibrationOpen(true);
-                    }}
-                    className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition ${
-                      darkMode
-                        ? 'border-[#3E3C35] bg-[#2C2A26] hover:bg-[#35332E] text-[#F5EFE6]'
-                        : 'border-[#D5C7AC] bg-[#F2ECE0] hover:bg-[#E7DEC9] text-[#2C2A25]'
-                    }`}
-                  >
-                    Visa mina 4 Kompasser
-                  </button>
+
                 </div>
               </section>
             )}
@@ -1813,6 +2034,26 @@ export default function FalkHomePage() {
                             <Lock className="w-2.5 h-2.5 text-[#C57B57] absolute top-0 -right-0.5" />
                           )}
                         </button>
+
+                        {/* Kompassen-knapp vid ikonraden under senaste FALK-svaret */}
+                        {idx === messages.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCalibrationView('overview');
+                              setIsCalibrationOpen(true);
+                            }}
+                            title="Öppna Kompassen"
+                            className={`ml-1 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition ${
+                              darkMode
+                                ? 'border-[#3E3B34] bg-[#23221F] text-[#E8DCC4] hover:border-[#C57B57]'
+                                : 'border-[#D5C7AC] bg-[#FAF7F0] text-[#1C1C1C] hover:border-[#4E5C4B]'
+                            }`}
+                          >
+                            <Compass className="w-3.5 h-3.5 text-[#C57B57]" />
+                            <span>Kompassen</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
