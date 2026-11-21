@@ -1011,11 +1011,19 @@ export default function FalkHomePage() {
         })),
       };
 
-      const res = await fetch(`${backendUrl}/api/chat`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      let res: Response;
+      try {
+        res = await fetch(`${backendUrl}/api/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const data = await res.json().catch(() => ({}));
 
@@ -1070,8 +1078,14 @@ export default function FalkHomePage() {
         }
       }
     } catch (err) {
-      const errText =
-        err instanceof Error ? err.message : 'Ett oväntat fel uppstod.';
+      const isTimeout =
+        err instanceof Error &&
+        (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
+      const errText = isTimeout
+        ? 'FALK startar upp eller svarar långsammare än vanligt just nu. Vänta några sekunder och försök igen.'
+        : err instanceof Error
+        ? err.message
+        : 'Ett oväntat fel uppstod.';
       setMessages((prev) => [
         ...prev,
         {
