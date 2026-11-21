@@ -835,6 +835,7 @@ export default function FalkHomePage() {
       if (perm !== 'granted') return;
 
       const reg = await navigator.serviceWorker.register('/sw.js');
+      await reg.update().catch(() => {});
       await navigator.serviceWorker.ready;
 
       const headers = await getAuthHeaders();
@@ -1064,6 +1065,9 @@ export default function FalkHomePage() {
         localStorage.setItem(todayKey, String(updatedCount));
       } else {
         await loadUserData();
+        if (data?.reminder && isPremium) {
+          void registerWebPushSubscription(Notification.permission === 'default');
+        }
       }
     } catch (err) {
       const errText =
@@ -2035,25 +2039,6 @@ export default function FalkHomePage() {
                           )}
                         </button>
 
-                        {/* Kompassen-knapp vid ikonraden under senaste FALK-svaret */}
-                        {idx === messages.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCalibrationView('overview');
-                              setIsCalibrationOpen(true);
-                            }}
-                            title="Öppna Kompassen"
-                            className={`ml-1 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition ${
-                              darkMode
-                                ? 'border-[#3E3B34] bg-[#23221F] text-[#E8DCC4] hover:border-[#C57B57]'
-                                : 'border-[#D5C7AC] bg-[#FAF7F0] text-[#1C1C1C] hover:border-[#4E5C4B]'
-                            }`}
-                          >
-                            <Compass className="w-3.5 h-3.5 text-[#C57B57]" />
-                            <span>Kompassen</span>
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>

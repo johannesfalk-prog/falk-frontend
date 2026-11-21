@@ -18,8 +18,9 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'FALK – Påminnelse';
   const options = {
     body: data.body || 'Du har en påminnelse från FALK.',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    vibrate: [200, 100, 200],
     tag: data.tag || 'falk-reminder',
     renotify: true,
     data: {
