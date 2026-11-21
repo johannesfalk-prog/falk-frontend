@@ -823,6 +823,12 @@ export default function B2BPortalPage() {
                     >
                       Övningar för ledarskap &amp; kommunikation
                     </a>
+                    <a
+                      href="/moderator?context=b2b"
+                      className="w-full text-center px-3.5 py-2 rounded-xl bg-[#C57B57] text-white text-xs font-medium hover:bg-[#B26B49] transition"
+                    >
+                      Neutralt moderatorsamtal (2 parter)
+                    </a>
                   </div>
                 </div>
 

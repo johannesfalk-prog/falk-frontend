@@ -26,6 +26,7 @@ import {
   Sparkles,
   BookOpen,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 import { supabase, getAuthHeaders } from '../lib/supabase';
 import {
@@ -2236,6 +2237,24 @@ export default function FalkHomePage() {
             }`}
           >
             <TrendingUp className="w-5 h-5" strokeWidth={2} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!isPremium) {
+                openPaywall('FALK Moderator (neutral samtalsledare för relationer och team) ingår i FALK Premium.');
+                return;
+              }
+              window.location.href = '/moderator';
+            }}
+            title="FALK Moderator"
+            aria-label="FALK Moderator"
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95 ${
+              darkMode ? 'hover:bg-[#32302B]' : 'hover:bg-[#E8DCC4]/70'
+            }`}
+          >
+            <Users className="w-5 h-5" strokeWidth={2} />
           </button>
 
           <button
