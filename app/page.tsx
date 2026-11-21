@@ -367,6 +367,20 @@ export default function FalkHomePage() {
 
   // Ladda användardata (profil, konversationer, insikter, påminnelser, kalibrering)
   const loadUserData = useCallback(async () => {
+    const fetchWithTimeout = async (
+      url: string,
+      options: RequestInit = {},
+      timeoutMs = 15000
+    ) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user;
 
@@ -464,7 +478,7 @@ export default function FalkHomePage() {
       } else {
         try {
           const headers = await getAuthHeaders();
-          const redeemRes = await fetch(`${backendUrl}/api/promo/redeem`, {
+          const redeemRes = await fetchWithTimeout(`${backendUrl}/api/promo/redeem`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ code: pendingPromo }),
@@ -479,7 +493,7 @@ export default function FalkHomePage() {
           } else if (redeemRes.status === 400 || redeemRes.status === 409) {
             // Tyst fallback till B2B-inbjudningskod om det inte var en B2C-rabattkod
             try {
-              const joinRes = await fetch(`${backendUrl}/api/b2b/join`, {
+              const joinRes = await fetchWithTimeout(`${backendUrl}/api/b2b/join`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ code: pendingPromo }),
@@ -524,9 +538,9 @@ export default function FalkHomePage() {
     try {
       const headers = await getAuthHeaders();
       const [insRes, remRes, calRes] = await Promise.all([
-        fetch(`${backendUrl}/api/insights`, { headers }),
-        fetch(`${backendUrl}/api/reminders`, { headers }),
-        fetch(`${backendUrl}/api/calibration`, { headers }),
+        fetchWithTimeout(`${backendUrl}/api/insights`, { headers }),
+        fetchWithTimeout(`${backendUrl}/api/reminders`, { headers }),
+        fetchWithTimeout(`${backendUrl}/api/calibration`, { headers }),
       ]);
 
       if (insRes.ok) {
