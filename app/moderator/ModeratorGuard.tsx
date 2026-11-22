@@ -22,10 +22,9 @@ export default function ModeratorGuard({
             ? new URLSearchParams(window.location.search)
             : null;
         const roomParam = (params?.get('room') || '').trim();
-        const joinParam = (params?.get('join') || '').trim();
 
-        // Tillåt inbjuden motpart utan konto/Premium när giltig rumskod eller join-flagga anges
-        if (/^[A-Za-z0-9_-]{4,16}$/.test(roomParam) || joinParam === '1') {
+        // Tillåt inbjuden motpart utan konto/Premium endast när en giltig rumskod (?room=...) anges
+        if (/^[A-Za-z0-9_-]{4,16}$/.test(roomParam)) {
           if (active) {
             setAuthorized(true);
           }
