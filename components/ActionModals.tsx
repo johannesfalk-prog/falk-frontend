@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Lock,
@@ -20,6 +20,8 @@ import {
   ExternalLink,
   AlertTriangle,
   User,
+  Volume2,
+  Square,
 } from 'lucide-react';
 import { supabase, getAuthHeaders, setSessionPersistence } from '@/lib/supabase';
 import { DEVELOPMENT_AREAS } from '@/lib/types';
@@ -100,6 +102,112 @@ export default function ActionModals({
   const [promoCode, setPromoCode] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [hasB2bSeat, setHasB2bSeat] = useState(false);
+
+  const FALK_TTS_VOICES = [
+    { id: 'onyx', label: 'Onyx – Djup & lugn (Standard)' },
+    { id: 'sage', label: 'Sage – Eftertänksam & varm' },
+    { id: 'ash', label: 'Ash – Klar & stadig' },
+    { id: 'nova', label: 'Nova – Mjuk & närvarande' },
+    { id: 'echo', label: 'Echo – Balanserad & neutral' },
+    { id: 'coral', label: 'Coral – Vänlig & tydlig' },
+    { id: 'fable', label: 'Fable – Berättande & rofylld' },
+    { id: 'alloy', label: 'Alloy – Avskalad & saklig' },
+    { id: 'shimmer', label: 'Shimmer – Ljus & stillsam' },
+  ] as const;
+
+  const [selectedVoice, setSelectedVoice] = useState<string>('onyx');
+  const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const stopVoicePreview = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.src = '';
+      previewAudioRef.current = null;
+    }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setIsPreviewingVoice(false);
+  };
+
+  useEffect(() => {
+    if (activeModal === 'settings') {
+      try {
+        const saved = window.localStorage.getItem('falk_tts_voice');
+        if (saved && FALK_TTS_VOICES.some((v) => v.id === saved)) {
+          setSelectedVoice(saved);
+        }
+      } catch {
+        // Ignorera storage-fel
+      }
+    } else {
+      stopVoicePreview();
+    }
+    return () => {
+      stopVoicePreview();
+    };
+  }, [activeModal]);
+
+  const handleVoiceChange = (voiceId: string) => {
+    setSelectedVoice(voiceId);
+    stopVoicePreview();
+    try {
+      window.localStorage.setItem('falk_tts_voice', voiceId);
+    } catch {
+      // Ignorera storage-fel
+    }
+  };
+
+  const handlePreviewVoice = async () => {
+    if (isPreviewingVoice) {
+      stopVoicePreview();
+      return;
+    }
+    if (!isPremium || isGuest) return;
+    setErrorMsg(null);
+    setIsPreviewingVoice(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${backendUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: 'Hej. Jag är Falk. Ta ett lugnt andetag – var vill du börja idag?',
+          voice: selectedVoice,
+        }),
+      });
+      if (!res.ok) {
+        let detail = 'Kunde inte spela upp röstprov just nu.';
+        try {
+          const errData = await res.json();
+          if (errData?.error) detail = errData.error;
+        } catch {
+          // Ignorera JSON-parsningsfel
+        }
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      previewUrlRef.current = url;
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => stopVoicePreview();
+      audio.onerror = () => {
+        stopVoicePreview();
+        setErrorMsg('Uppspelningen av röstprovet avbröts.');
+      };
+      await audio.play();
+    } catch (err) {
+      stopVoicePreview();
+      setErrorMsg(err instanceof Error ? err.message : 'Kunde inte spela upp röstprov.');
+    }
+  };
 
   useEffect(() => {
     if (activeModal !== 'settings' || !isPremium || isGuest) {
@@ -1551,6 +1659,65 @@ export default function ActionModals({
                 {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 {darkMode ? 'Byt till Standard' : 'Byt till Mörk vy'}
               </button>
+            </div>
+
+            {/* FALKs Röst (endast Premium / B2B) */}
+            <div className="rounded-xl border border-[#D8CCB8]/60 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Volume2 className="h-4 w-4 text-[#4E5C4B]" />
+                  <span>FALKs röst</span>
+                </div>
+                {(!isPremium || isGuest) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#C57B57]/15 px-2 py-0.5 text-[10px] font-semibold text-[#C57B57]">
+                    <Lock className="h-3 w-3" />
+                    PREMIUM
+                  </span>
+                )}
+              </div>
+
+              {isPremium && !isGuest ? (
+                <>
+                  <p className={`text-xs ${subText}`}>
+                    Välj vilken röst FALK använder vid högläsning i chatten och moderatorn.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={selectedVoice}
+                      onChange={(e) => handleVoiceChange(e.target.value)}
+                      aria-label="Välj röst för FALK"
+                      className={`flex-1 rounded-xl border px-3 py-1.5 text-xs font-medium outline-none ${inputBg}`}
+                    >
+                      {FALK_TTS_VOICES.map((voice) => (
+                        <option key={voice.id} value={voice.id}>
+                          {voice.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handlePreviewVoice}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#4E5C4B]/40 px-3 py-1.5 text-xs font-medium hover:bg-[#4E5C4B]/10 transition"
+                    >
+                      {isPreviewingVoice ? (
+                        <>
+                          <Square className="h-3.5 w-3.5" />
+                          <span>Stoppa</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="h-3.5 w-3.5" />
+                          <span>Provlyssna</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className={`text-xs ${subText}`}>
+                  Röstbyte med naturliga AI-röster ingår i Premium. Som gäst används enhetens standardröst vid högläsning.
+                </p>
+              )}
             </div>
 
             {/* Profil (enbart inloggad) */}

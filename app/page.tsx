@@ -234,6 +234,35 @@ export default function FalkHomePage() {
     null
   );
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsUrlRef = useRef<string | null>(null);
+  const ttsAbortRef = useRef<AbortController | null>(null);
+
+  const stopAllSpeech = useCallback(() => {
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort();
+      ttsAbortRef.current = null;
+    }
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current.src = "";
+      ttsAudioRef.current = null;
+    }
+    if (ttsUrlRef.current) {
+      URL.revokeObjectURL(ttsUrlRef.current);
+      ttsUrlRef.current = null;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingMessageId(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopAllSpeech();
+    };
+  }, [stopAllSpeech]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const openPaywall = useCallback((reason: string) => {
@@ -1117,30 +1146,91 @@ export default function FalkHomePage() {
     }
   };
 
-  // TTS (Högtalare - ikon 1 av 9)
-  const handleToggleSpeak = (msg: Message) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
+  // TTS (Högtalare - ikon 1 av 9: OpenAI TTS för Premium/B2B, Web Speech fallback för Gäst)
+  const handleToggleSpeak = async (msg: Message) => {
     if (speakingMessageId === msg.id) {
-      window.speechSynthesis.cancel();
-      setSpeakingMessageId(null);
+      stopAllSpeech();
       return;
     }
 
-    window.speechSynthesis.cancel();
+    stopAllSpeech();
     const activeText =
       msg.variants && typeof msg.activeVariantIndex === 'number'
         ? msg.variants[msg.activeVariantIndex]?.content || msg.content
         : msg.content;
 
-    const utterance = new SpeechSynthesisUtterance(activeText);
-    utterance.lang = 'sv-SE';
-    utterance.rate = 0.96;
-    utterance.onend = () => setSpeakingMessageId(null);
-    utterance.onerror = () => setSpeakingMessageId(null);
+    const speakWithWebSpeech = () => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        setSpeakingMessageId(null);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(activeText);
+      utterance.lang = 'sv-SE';
+      utterance.rate = 0.96;
+      utterance.onend = () => setSpeakingMessageId(null);
+      utterance.onerror = () => setSpeakingMessageId(null);
+      setSpeakingMessageId(msg.id);
+      window.speechSynthesis.speak(utterance);
+    };
 
+    if (!isPremium || isGuest) {
+      speakWithWebSpeech();
+      return;
+    }
+
+    let selectedVoice = 'onyx';
+    try {
+      const storedVoice = localStorage.getItem('falk_tts_voice');
+      if (storedVoice) selectedVoice = storedVoice;
+    } catch {
+      // Ignorera storage-fel
+    }
+
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
     setSpeakingMessageId(msg.id);
-    window.speechSynthesis.speak(utterance);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        if (!controller.signal.aborted) speakWithWebSpeech();
+        return;
+      }
+
+      const res = await fetch(`${backendUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: activeText.slice(0, 1500),
+          voice: selectedVoice,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error('TTS API error');
+      }
+
+      const blob = await res.blob();
+      if (controller.signal.aborted) return;
+
+      const url = URL.createObjectURL(blob);
+      ttsUrlRef.current = url;
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.onended = () => stopAllSpeech();
+      audio.onerror = () => stopAllSpeech();
+      await audio.play();
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      if (!controller.signal.aborted) {
+        speakWithWebSpeech();
+      }
+    }
   };
 
   // Svarskarusell: Nytt svar (gäst + premium) samt Plus / Minus (endast premium)

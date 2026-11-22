@@ -446,6 +446,40 @@ export default function ModeratorPage() {
 
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsUrlRef = useRef<string | null>(null);
+  const ttsAbortRef = useRef<AbortController | null>(null);
+
+  const stopAllSpeech = useCallback(() => {
+    if (ttsAbortRef.current) {
+      try {
+        ttsAbortRef.current.abort();
+      } catch {
+        // Ignorera
+      }
+      ttsAbortRef.current = null;
+    }
+    if (ttsAudioRef.current) {
+      try {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.src = '';
+      } catch {
+        // Ignorera
+      }
+      ttsAudioRef.current = null;
+    }
+    if (ttsUrlRef.current) {
+      try {
+        URL.revokeObjectURL(ttsUrlRef.current);
+      } catch {
+        // Ignorera
+      }
+      ttsUrlRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }, []);
 
   // Läs URL-parametrar (?room=XXXXXX, ?join=1, ?context=b2b) vid laddning
   useEffect(() => {
@@ -484,11 +518,9 @@ export default function ModeratorPage() {
       } catch {
         // Ignorera
       }
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopAllSpeech();
     };
-  }, []);
+  }, [stopAllSpeech]);
 
   const activeMessages: ModeratorMessage[] = roomData
     ? [
@@ -567,15 +599,11 @@ export default function ModeratorPage() {
       : roomData.part_1_name
     : participants[activeSpeakerIndex] || 'Deltagare 1';
 
-  // TTS Uppläsning per FALK-meddelande
-  const handleToggleSpeak = (msg: ModeratorMessage) => {
+  // TTS Uppläsning per FALK-meddelande (OpenAI TTS för Premium/B2B, Web Speech fallback för gäst)
+  const speakWithWebSpeech = (msg: ModeratorMessage) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setErrorBanner('Din webbläsare saknar stöd för uppläsning (TTS).');
-      return;
-    }
-    if (speakingMessageId === msg.id) {
-      window.speechSynthesis.cancel();
       setSpeakingMessageId(null);
+      setErrorBanner('Din webbläsare saknar stöd för uppläsning (TTS).');
       return;
     }
     window.speechSynthesis.cancel();
@@ -586,6 +614,96 @@ export default function ModeratorPage() {
     utter.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(msg.id);
     window.speechSynthesis.speak(utter);
+  };
+
+  const handleToggleSpeak = async (msg: ModeratorMessage) => {
+    if (typeof window === 'undefined') return;
+    if (speakingMessageId === msg.id) {
+      stopAllSpeech();
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    stopAllSpeech();
+
+    let accessToken = '';
+    if (hasPremiumSession) {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        accessToken = session?.access_token ?? '';
+      } catch {
+        accessToken = '';
+      }
+    }
+
+    if (!hasPremiumSession || !accessToken) {
+      speakWithWebSpeech(msg);
+      return;
+    }
+
+    const chosenVoice = window.localStorage.getItem('falk_tts_voice') || 'onyx';
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
+    setSpeakingMessageId(msg.id);
+
+    try {
+      const res = await fetch(`${backendUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          text: msg.content,
+          voice: chosenVoice,
+          speed: 0.96,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        if (controller.signal.aborted) return;
+        speakWithWebSpeech(msg);
+        return;
+      }
+
+      const blob = await res.blob();
+      if (controller.signal.aborted) return;
+
+      const url = URL.createObjectURL(blob);
+      ttsUrlRef.current = url;
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+
+      audio.onended = () => {
+        if (ttsUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          ttsUrlRef.current = null;
+        }
+        if (ttsAudioRef.current === audio) {
+          ttsAudioRef.current = null;
+        }
+        setSpeakingMessageId(null);
+      };
+
+      audio.onerror = () => {
+        if (ttsUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          ttsUrlRef.current = null;
+        }
+        if (ttsAudioRef.current === audio) {
+          ttsAudioRef.current = null;
+        }
+        setSpeakingMessageId(null);
+      };
+
+      await audio.play();
+    } catch {
+      if (controller.signal.aborted) return;
+      speakWithWebSpeech(msg);
+    }
   };
 
   // Röstinmatning (Mikrofon -> text)
