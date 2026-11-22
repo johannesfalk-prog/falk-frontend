@@ -49,6 +49,7 @@ interface FinalCompassSummary {
 
 interface ModeratorMeta {
   phase: ModeratorPhase;
+  next_speaker?: string;
   perspective_triangle: PerspectiveTriangle;
   compass_summary: FinalCompassSummary | null;
 }
@@ -82,6 +83,17 @@ interface PublicModeratorRoom {
   part_1_name: string;
   part_2_name: string;
   guest_joined: boolean;
+  active_turn_role?: 'part_1' | 'part_2' | string;
+  active_turn_speaker?: string;
+  last_speaker_role?: string;
+  overlap_event?: {
+    id: string;
+    selected_role: string;
+    selected_speaker: string;
+    deferred_role: string;
+    deferred_speaker: string;
+    ts: number;
+  } | null;
   checkin_status: RoomCheckinStatus;
   messages: PublicRoomMessage[];
   moderator_meta: ModeratorMeta;
@@ -443,6 +455,16 @@ export default function ModeratorPage() {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [isDrawingOverlap, setIsDrawingOverlap] = useState<boolean>(false);
+  const [dismissedOverlapId, setDismissedOverlapId] = useState<string>('');
+  const [localOverlapEvent, setLocalOverlapEvent] = useState<{
+    id: string;
+    selected_role: string;
+    selected_speaker: string;
+    deferred_role: string;
+    deferred_speaker: string;
+    ts: number;
+  } | null>(null);
 
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -593,6 +615,13 @@ export default function ModeratorPage() {
     return () => clearInterval(timer);
   }, [roomCode, participantToken, fetchRoomState]);
 
+  const latestOverlapId = roomData?.overlap_event?.id || '';
+  useEffect(() => {
+    if (!latestOverlapId) return;
+    stopAllSpeech();
+    setSpeakingMessageId(null);
+  }, [latestOverlapId, stopAllSpeech]);
+
   const activeSpeaker = roomData
     ? viewerRole === 'part_2'
       ? roomData.part_2_name
@@ -706,9 +735,13 @@ export default function ModeratorPage() {
     }
   };
 
-  // Röstinmatning (Mikrofon -> text)
+  // Röstinmatning med omedelbart röstavbrott (barge-in) om FALK talar
   const handleToggleMic = () => {
     if (typeof window === 'undefined') return;
+    if (speakingMessageId) {
+      stopAllSpeech();
+      setSpeakingMessageId(null);
+    }
     if (isListening) {
       try {
         recognitionRef.current?.stop();
@@ -748,6 +781,81 @@ export default function ModeratorPage() {
     } catch {
       setIsListening(false);
     }
+  };
+
+  // Randomiserad ordfördelning när deltagare talar i mun på varandra
+  const handleTriggerOverlapDraw = async () => {
+    if (isDrawingOverlap || isSending) return;
+    stopAllSpeech();
+    setSpeakingMessageId(null);
+    setErrorBanner(null);
+
+    if (roomCode && participantToken) {
+      setIsDrawingOverlap(true);
+      try {
+        const res = await fetch(
+          `${backendUrl}/api/moderator/room/${encodeURIComponent(roomCode)}/overlap`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Moderator-Token': participantToken,
+            },
+            body: JSON.stringify({
+              participant_token: participantToken,
+              announce_falk: true,
+            }),
+          }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || data.error || 'Kunde inte fördela ordet.');
+        }
+        if (data.room) {
+          setRoomData(data.room);
+        }
+        setDismissedOverlapId('');
+      } catch (err: unknown) {
+        setErrorBanner(err instanceof Error ? err.message : 'Kunde inte slumpa ordet.');
+      } finally {
+        setIsDrawingOverlap(false);
+      }
+      return;
+    }
+
+    if (participants.length < 2) return;
+    const randBuf = new Uint32Array(1);
+    window.crypto.getRandomValues(randBuf);
+    const winnerIdx = randBuf[0] % participants.length;
+    const deferredIdx = (winnerIdx + 1) % participants.length;
+    const winnerName = participants[winnerIdx] || 'Deltagare 1';
+    const deferredName = participants[deferredIdx] || 'Deltagare 2';
+
+    setActiveSpeakerIndex(winnerIdx);
+    setDismissedOverlapId('');
+    setLocalOverlapEvent({
+      id: `local-${Date.now()}`,
+      selected_role: winnerIdx === 0 ? 'part_1' : 'part_2',
+      selected_speaker: winnerName,
+      deferred_role: deferredIdx === 0 ? 'part_1' : 'part_2',
+      deferred_speaker: deferredName,
+      ts: Date.now(),
+    });
+    setLocalMeta((prev) => ({
+      ...prev,
+      next_speaker: winnerName,
+    }));
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `falk-overlap-${Date.now()}`,
+        sender: 'falk',
+        role: 'falk',
+        speaker: 'FALK',
+        content: `Jag pausar här ett ögonblick eftersom ni kom in samtidigt. Ordet fördelades slumpvist så att båda får ro att tala till punkt: ${winnerName} börjar, och ${deferredName} lyssnar nu och tar vid direkt efter. Varsågod, ${winnerName}.`,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
   };
 
   // Lokala deltagarhanterare
@@ -957,6 +1065,15 @@ export default function ModeratorPage() {
           : 'Tack för att ni båda delade er utgångspunkt enskilt. Jag ser gemensamma behov av trygghet och ömsesidig förståelse. Vad vill ni börja utforska tillsammans?';
       if (data.moderator_meta) {
         setLocalMeta(data.moderator_meta);
+        const nextSp = String(data.moderator_meta.next_speaker || '').trim().toLowerCase();
+        if (nextSp && autoSwitchSpeaker && participants.length > 1) {
+          const matchedIdx = participants.findIndex(
+            (p) => p.trim().toLowerCase() === nextSp
+          );
+          if (matchedIdx !== -1) {
+            setActiveSpeakerIndex(matchedIdx);
+          }
+        }
       }
       setLocalCheckinSynthesized(true);
       setMessages((prev) => [
@@ -1021,6 +1138,8 @@ export default function ModeratorPage() {
     setLocalCheckinOpen(false);
     setLocalCheckinStep('p1');
     setActiveSpeakerIndex(0);
+    setLocalOverlapEvent(null);
+    setDismissedOverlapId('');
     setErrorBanner(null);
     setInput('');
   };
@@ -1041,9 +1160,18 @@ export default function ModeratorPage() {
     }
 
     try {
+      stopAllSpeech();
+      setSpeakingMessageId(null);
+
       // LÄGE A: Delat samtalsrum
       if (roomCode && participantToken) {
         if (!requestFinalCompass) setInput('');
+        const isOutOfTurn = Boolean(
+          !requestFinalCompass &&
+            roomData?.active_turn_role &&
+            viewerRole &&
+            roomData.active_turn_role !== viewerRole
+        );
         const res = await fetch(
           `${backendUrl}/api/moderator/room/${encodeURIComponent(roomCode)}/message`,
           {
@@ -1059,6 +1187,7 @@ export default function ModeratorPage() {
                 : trimmed,
               request_falk: true,
               final_compass: requestFinalCompass,
+              overlap_detected: isOutOfTurn,
             }),
           }
         );
@@ -1188,6 +1317,16 @@ export default function ModeratorPage() {
     0,
     PHASES.findIndex((p) => p.key === activeMeta.phase)
   );
+  const turnOwnerName = roomData
+    ? roomData.active_turn_speaker ||
+      (roomData.active_turn_role === 'part_2' ? roomData.part_2_name : roomData.part_1_name)
+    : activeSpeaker;
+  const isSharedOutOfTurn = Boolean(
+    roomData && viewerRole && roomData.active_turn_role && roomData.active_turn_role !== viewerRole
+  );
+  const rawOverlapEvent = roomData ? roomData.overlap_event : localOverlapEvent;
+  const activeOverlapEvent =
+    rawOverlapEvent && rawOverlapEvent.id !== dismissedOverlapId ? rawOverlapEvent : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#E8DCC4] text-[#1F241D]">
@@ -1307,6 +1446,71 @@ export default function ModeratorPage() {
               ({activeCounts.part_2}) {part2Label}
             </span>
           </div>
+
+          {/* Samtalsledarskap & Turordning */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#1F241D]/10 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-medium ${
+                  roomData
+                    ? isSharedOutOfTurn
+                      ? 'bg-[#C57B57]/15 text-[#9c5a38]'
+                      : 'bg-[#4E5C4B] text-white'
+                    : 'bg-[#4E5C4B]/12 text-[#1F241D]'
+                }`}
+              >
+                <span>
+                  {roomData
+                    ? isSharedOutOfTurn
+                      ? `Ordet hos: ${turnOwnerName}`
+                      : `Din tur att tala (${turnOwnerName})`
+                    : `Ordet hos: ${turnOwnerName}`}
+                </span>
+              </span>
+              {activeMeta.next_speaker && (
+                <span className="text-[#1F241D]/70">
+                  FALK leder nästa steg: <strong>{activeMeta.next_speaker}</strong>
+                </span>
+              )}
+            </div>
+
+            {(roomCode || hasPremiumSession) && (
+              <button
+                type="button"
+                onClick={handleTriggerOverlapDraw}
+                disabled={isDrawingOverlap || isSending}
+                title="Pausa samtalet och slumpa vem som talar först när ni talar i mun på varandra"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white hover:bg-[#E8DCC4]/60 text-[#1F241D] border border-[#1F241D]/15 font-medium transition disabled:opacity-40"
+              >
+                <Sparkles className="w-3 h-3 text-[#C57B57]" />
+                <span>
+                  {isDrawingOverlap ? 'Fördelar ordet...' : 'Talar samtidigt · Slumpa ordet'}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {activeOverlapEvent && (
+            <div className="rounded-xl bg-white border border-[#C57B57]/45 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs">
+              <div className="space-y-0.5">
+                <p className="font-semibold text-[#1F241D]">
+                  FALK fördelade ordet slumpvist vid samtidigt inpass
+                </p>
+                <p className="text-[11px] text-[#1F241D]/80">
+                  <strong>1. Talar först:</strong> {activeOverlapEvent.selected_speaker} ·{' '}
+                  <strong>2. Lyssnar &amp; tar vid efter:</strong>{' '}
+                  {activeOverlapEvent.deferred_speaker}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDismissedOverlapId(activeOverlapEvent.id)}
+                className="text-[11px] px-2.5 py-1 rounded-full bg-[#F5EFE4] hover:bg-[#E8DCC4] text-[#1F241D]/75 transition"
+              >
+                Uppfattat
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1960,6 +2164,30 @@ export default function ModeratorPage() {
             </div>
           )}
 
+          {(speakingMessageId || isSharedOutOfTurn) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px]">
+              {speakingMessageId ? (
+                <div className="inline-flex items-center gap-2 text-[#9c5a38] font-medium">
+                  <span>FALK läser upp – tala i mikrofonen eller skriv för att avbryta</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopAllSpeech();
+                      setSpeakingMessageId(null);
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-[#C57B57] text-white text-[10px]"
+                  >
+                    Avbryt FALK
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[#1F241D]/65">
+                  Det är <strong>{turnOwnerName}s</strong> tur nu (skickar du ändå slumpfördelar FALK ordet)
+                </span>
+              )}
+            </div>
+          )}
+
           <form
             onSubmit={(e) => handleSendMessage(e, false)}
             className="flex items-center gap-2 bg-white rounded-full px-3.5 py-2 shadow-xs border border-[#1F241D]/10"
@@ -1990,8 +2218,18 @@ export default function ModeratorPage() {
             <input
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Dela ${activeSpeaker}s perspektiv med FALK...`}
+              onChange={(e) => {
+                if (speakingMessageId) {
+                  stopAllSpeech();
+                  setSpeakingMessageId(null);
+                }
+                setInput(e.target.value);
+              }}
+              placeholder={
+                isSharedOutOfTurn
+                  ? `Inväntar ${turnOwnerName} (eller flika in som ${activeSpeaker})...`
+                  : `Dela ${activeSpeaker}s perspektiv med FALK...`
+              }
               disabled={isSending || isGeneratingCompass}
               className="flex-1 bg-transparent text-sm text-[#1F241D] placeholder:text-[#1F241D]/45 outline-none min-w-0"
             />
