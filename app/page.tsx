@@ -2128,6 +2128,7 @@ export default function FalkHomePage() {
               }
               setActiveConversationId(null);
               setMessages([]);
+              setActiveView('chat');
               handleSendMessage(card.prompt_trigger || card.title);
             }}
             onBackToChat={() => setActiveView('chat')}
