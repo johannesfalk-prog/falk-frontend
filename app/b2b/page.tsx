@@ -99,6 +99,7 @@ export default function B2BPortalPage() {
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
 
@@ -578,14 +579,24 @@ export default function B2BPortalPage() {
               <label className="block text-xs font-semibold text-[#4E5C4B] mb-1">
                 Lösenord
               </label>
-              <input
-                type="password"
-                required
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#4E5C4B]/25 text-sm text-[#1C211B] focus:outline-none focus:border-[#4E5C4B]"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type={showLoginPassword ? "text" : "password"}
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 pr-16 rounded-xl bg-white border border-[#4E5C4B]/25 text-sm text-[#1C211B] focus:outline-none focus:border-[#4E5C4B]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword((prev) => !prev)}
+                  aria-label={showLoginPassword ? "Dölj lösenord" : "Visa lösenord"}
+                  className="absolute right-3 text-xs font-medium text-[#4E5C4B] hover:opacity-80"
+                >
+                  {showLoginPassword ? "Dölj" : "Visa"}
+                </button>
+              </div>
             </div>
 
             {loginError && (
