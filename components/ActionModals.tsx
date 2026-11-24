@@ -93,6 +93,7 @@ export default function ActionModals({
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'recovery'>('register');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [nameInput, setNameInput] = useState('');
@@ -1227,15 +1228,25 @@ export default function ActionModals({
                         </button>
                       )}
                     </div>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={passwordInput}
-                      onChange={(e) => setPasswordInput(e.target.value)}
-                      placeholder="Minst 6 tecken"
-                      className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${inputBg}`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        minLength={6}
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder="Minst 6 tecken"
+                        className={`w-full rounded-xl border px-3 py-2 pr-14 text-sm outline-none ${inputBg}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
+                        className="absolute right-2.5 text-xs font-medium opacity-75 hover:opacity-100"
+                      >
+                        {showPassword ? "Dölj" : "Visa"}
+                      </button>
+                    </div>
                   </div>
 
                   <label className="flex items-start gap-2 pt-0.5 text-xs cursor-pointer">
