@@ -461,13 +461,13 @@ export default function LibraryView({
                 <div
                   key={card.id}
                   onClick={() => onStartExercise(card)}
-                  className={`group flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition duration-200 ${
+                  className={`group flex min-w-0 cursor-pointer flex-col justify-between rounded-2xl border p-5 transition duration-200 ${
                     darkMode
                       ? 'border-[#333A32] bg-[#212620] hover:border-[#A8BFA1] hover:bg-[#262C25]'
                       : 'border-[#D5C7AC] bg-[#F7F3EA] shadow-sm hover:-translate-y-0.5 hover:border-[#4E5C4B] hover:shadow-md'
                   }`}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
@@ -478,7 +478,7 @@ export default function LibraryView({
                         <Sparkles className="h-3 w-3" />
                         {card.category}
                       </span>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {card.segment === 'b2b' && (
                           <span
                             className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
@@ -499,28 +499,30 @@ export default function LibraryView({
                             {card.tag}
                           </span>
                         )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setInfoCard(card);
-                          }}
-                          aria-label={`Visa inledning och struktur för ${card.title}`}
-                          title="Inledning och struktur"
-                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
-                            darkMode
-                              ? 'border-[#333A32] bg-[#1B1F1A] text-[#A8BFA1] hover:border-[#A8BFA1] hover:text-white'
-                              : 'border-[#D5C7AC] bg-[#F2ECE0] text-[#4E5C4B] hover:border-[#4E5C4B] hover:text-[#1F241E]'
-                          }`}
-                        >
-                          <Info className="h-3.5 w-3.5" />
-                        </button>
                       </div>
                     </div>
 
-                    <h2 className="text-base font-semibold leading-snug">
-                      {card.title}
-                    </h2>
+                    <div className="flex items-start justify-between gap-2">
+                      <h2 className="min-w-0 text-base font-semibold leading-snug">
+                        {card.title}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInfoCard(card);
+                        }}
+                        aria-label={`Visa inledning och struktur för ${card.title}`}
+                        title="Inledning och struktur"
+                        className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${
+                          darkMode
+                            ? 'border-[#333A32] bg-[#1B1F1A] text-[#A8BFA1] hover:border-[#A8BFA1] hover:text-white'
+                            : 'border-[#D5C7AC] bg-[#F2ECE0] text-[#4E5C4B] hover:border-[#4E5C4B] hover:text-[#1F241E]'
+                        }`}
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                     <p
                       className={`mt-2 text-xs leading-relaxed sm:text-sm ${
                         darkMode ? 'text-[#B8B2A6]' : 'text-[#4E5C4B]'
