@@ -625,6 +625,11 @@ export default function ModeratorPage() {
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.room) {
           setRoomData(data.room);
+          setParticipants((prev) => {
+            const n0 = data.room.part_1_name || prev[0] || "Deltagare 1";
+            const n1 = data.room.part_2_name || prev[1] || "Deltagare 2";
+            return prev[0] === n0 && prev[1] === n1 ? prev : [n0, n1];
+          });
         }
       } catch {
         // Tyst vid tillfälligt nätverksavbrott under polling
@@ -840,6 +845,11 @@ export default function ModeratorPage() {
         }
         if (data.room) {
           setRoomData(data.room);
+          setParticipants((prev) => {
+            const n0 = data.room.part_1_name || prev[0] || "Deltagare 1";
+            const n1 = data.room.part_2_name || prev[1] || "Deltagare 2";
+            return prev[0] === n0 && prev[1] === n1 ? prev : [n0, n1];
+          });
         }
         setDismissedOverlapId('');
       } catch (err: unknown) {
@@ -984,6 +994,13 @@ export default function ModeratorPage() {
       setParticipantToken(tok);
       setViewerRole('part_2');
       setRoomData(joinedRoom);
+      if (joinedRoom) {
+        setParticipants((prev) => {
+          const n0 = joinedRoom.part_1_name || prev[0] || "Deltagare 1";
+          const n1 = joinedRoom.part_2_name || prev[1] || "Deltagare 2";
+          return prev[0] === n0 && prev[1] === n1 ? prev : [n0, n1];
+        });
+      }
       setContextMode(joinedRoom.context || 'private');
       setShowJoinModal(false);
       if (typeof window !== 'undefined') {
@@ -1033,6 +1050,11 @@ export default function ModeratorPage() {
       }
       if (data.room) {
         setRoomData(data.room);
+        setParticipants((prev) => {
+          const n0 = data.room.part_1_name || prev[0] || "Deltagare 1";
+          const n1 = data.room.part_2_name || prev[1] || "Deltagare 2";
+          return prev[0] === n0 && prev[1] === n1 ? prev : [n0, n1];
+        });
       }
       setRoomPrivateSubmitted(true);
       setRoomPrivateText('');
@@ -1224,6 +1246,11 @@ export default function ModeratorPage() {
         }
         if (data.room) {
           setRoomData(data.room);
+          setParticipants((prev) => {
+            const n0 = data.room.part_1_name || prev[0] || "Deltagare 1";
+            const n1 = data.room.part_2_name || prev[1] || "Deltagare 2";
+            return prev[0] === n0 && prev[1] === n1 ? prev : [n0, n1];
+          });
         }
         return;
       }
