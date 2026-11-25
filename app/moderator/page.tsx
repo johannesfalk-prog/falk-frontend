@@ -369,13 +369,39 @@ export default function ModeratorPage() {
           if (active) setHasPremiumSession(false);
           return;
         }
+        let resolvedAccountName = "";
+        const metaObj = (user.user_metadata || {}) as Record<string, unknown>;
+        const metaCandidate = [metaObj.full_name, metaObj.name, metaObj.display_name].find(
+          (v) => typeof v === "string" && v.trim().length > 0
+        ) as string | undefined;
+        if (metaCandidate) {
+          resolvedAccountName = metaCandidate.trim();
+        } else if (typeof user.email === "string" && user.email.includes("@")) {
+          resolvedAccountName = user.email.split("@")[0].trim();
+        }
+        let isPrem = false;
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
-          .select('is_premium')
+          .select('*')
           .eq('user_id', user.id)
           .maybeSingle();
+        if (!profileError && profile) {
+          const profRec = profile as Record<string, unknown>;
+          isPrem = Boolean(profRec.is_premium);
+          const profName = [profRec.display_name, profRec.full_name, profRec.name].find(
+            (v) => typeof v === "string" && v.trim().length > 0
+          ) as string | undefined;
+          if (profName) {
+            resolvedAccountName = profName.trim();
+          }
+        }
         if (active) {
-          setHasPremiumSession(!profileError && Boolean(profile?.is_premium));
+          setHasPremiumSession(isPrem);
+          if (resolvedAccountName) {
+            setParticipants((prev) =>
+              prev.map((entry, i) => (i === 0 && entry === "Deltagare 1" ? resolvedAccountName : entry))
+            );
+          }
         }
       } catch {
         if (active) setHasPremiumSession(false);
@@ -405,6 +431,7 @@ export default function ModeratorPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<string>('');
   const [autoSwitchSpeaker, setAutoSwitchSpeaker] = useState<boolean>(true);
+  const [showAdvancedControls, setShowAdvancedControls] = useState<boolean>(false);
 
   // Lokalt chattflöde & metadata
   const [messages, setMessages] = useState<ModeratorMessage[]>([
@@ -1601,48 +1628,60 @@ export default function ModeratorPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-1.5 text-[11px] text-[#1F241D]/75 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={autoSwitchSpeaker}
-                    onChange={(e) => setAutoSwitchSpeaker(e.target.checked)}
-                    className="accent-[#4E5C4B] rounded"
-                  />
-                  <span>Växla talare</span>
-                </label>
-
                 <button
                   type="button"
-                  onClick={() => {
-                    setLocalCheckinOpen((v) => !v);
-                    setLocalCheckinStep('p1');
-                  }}
+                  onClick={() => setShowAdvancedControls((v) => !v)}
                   className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#F5EFE4] hover:bg-white border border-[#1F241D]/15 transition"
                 >
-                  <EyeOff className="w-3 h-3 text-[#C57B57]" />
-                  <span>
-                    {localCheckinSynthesized ? 'Incheckning klar' : 'Enskild incheckning'}
-                  </span>
+                  <span>{showAdvancedControls ? "Dölj fler val" : "Fler samtalval"}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleCreateSharedRoom}
-                  disabled={isCreatingRoom}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#4E5C4B] text-white hover:bg-[#3f4b3c] transition disabled:opacity-50"
-                >
-                  <Link2 className="w-3 h-3" />
-                  <span>{isCreatingRoom ? 'Skapar rum...' : 'Bjud in på distans'}</span>
-                </button>
+                {showAdvancedControls && (
+                  <>
+                    <label className="inline-flex items-center gap-1.5 text-[11px] text-[#1F241D]/75 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={autoSwitchSpeaker}
+                        onChange={(e) => setAutoSwitchSpeaker(e.target.checked)}
+                        className="accent-[#4E5C4B] rounded"
+                      />
+                      <span>Växla talare</span>
+                    </label>
 
-                <button
-                  type="button"
-                  onClick={() => setShowJoinModal(true)}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#F5EFE4] hover:bg-white border border-[#1F241D]/15 transition"
-                >
-                  <Users className="w-3 h-3 text-[#4E5C4B]" />
-                  <span>Ange rumskod</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalCheckinOpen((v) => !v);
+                        setLocalCheckinStep('p1');
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#F5EFE4] hover:bg-white border border-[#1F241D]/15 transition"
+                    >
+                      <EyeOff className="w-3 h-3 text-[#C57B57]" />
+                      <span>
+                        {localCheckinSynthesized ? 'Incheckning klar' : 'Enskild incheckning'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCreateSharedRoom}
+                      disabled={isCreatingRoom}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#4E5C4B] text-white hover:bg-[#3f4b3c] transition disabled:opacity-50"
+                    >
+                      <Link2 className="w-3 h-3" />
+                      <span>{isCreatingRoom ? 'Skapar rum...' : 'Bjud in på distans'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowJoinModal(true)}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#F5EFE4] hover:bg-white border border-[#1F241D]/15 transition"
+                    >
+                      <Users className="w-3 h-3 text-[#4E5C4B]" />
+                      <span>Ange rumskod</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ) : null) : (
@@ -1911,6 +1950,16 @@ export default function ModeratorPage() {
               </button>
               <button
                 type="submit"
+                onClick={() => {
+                  const cleanGuest = joinGuestName.trim();
+                  if (cleanGuest) {
+                    setParticipants((prev) => {
+                      const next = [...prev];
+                      next[1] = cleanGuest;
+                      return next;
+                    });
+                  }
+                }}
                 disabled={!joinPromptCode.trim() || !joinGuestName.trim() || isJoiningRoom}
                 className="text-xs font-medium px-4 py-2 rounded-full bg-[#4E5C4B] text-white disabled:opacity-40"
               >
@@ -2215,8 +2264,8 @@ export default function ModeratorPage() {
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
 
-            <input
-              type="text"
+            <textarea
+              rows={1}
               value={input}
               onChange={(e) => {
                 if (speakingMessageId) {
@@ -2224,6 +2273,17 @@ export default function ModeratorPage() {
                   setSpeakingMessageId(null);
                 }
                 setInput(e.target.value);
+                e.currentTarget.style.height = "auto";
+                e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 180)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim() && !isSending && !isGeneratingCompass) {
+                    e.currentTarget.form?.requestSubmit();
+                    e.currentTarget.style.height = "auto";
+                  }
+                }
               }}
               placeholder={
                 isSharedOutOfTurn
@@ -2231,7 +2291,7 @@ export default function ModeratorPage() {
                   : `Dela ${activeSpeaker}s perspektiv med FALK...`
               }
               disabled={isSending || isGeneratingCompass}
-              className="flex-1 bg-transparent text-sm text-[#1F241D] placeholder:text-[#1F241D]/45 outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm text-[#1F241D] placeholder:text-[#1F241D]/45 outline-none min-w-0 resize-none max-h-[180px] overflow-y-auto leading-relaxed py-1"
             />
 
             <button
