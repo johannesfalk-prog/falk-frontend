@@ -116,6 +116,12 @@ const CATEGORY_PALETTES = [
   },
 ];
 
+function isDurationTag(tag?: string): boolean {
+  const clean = (tag || "").trim().toLowerCase();
+  if (!clean) return false;
+  return /^(?:\d+(?:[.,]\d+)?\s*(?:min(?:uter?)?|tim(?:mar?)?|h|sek(?:under?)?)|ca\.?\s*\d+\s*(?:min|tim|h)).*$/i.test(clean);
+}
+
 function getCategoryBadgeClasses(category: string, darkMode: boolean): string {
   const key = (category || "").trim().toLowerCase();
   let idx = -1;
@@ -468,20 +474,20 @@ export default function LibraryView({
                   }`}
                 >
                   <div className="min-w-0">
-                    <div className="mb-3 flex items-center justify-between gap-2">
+                    <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
+                        className={`inline-flex max-w-[60%] min-w-0 shrink items-center gap-1 truncate rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
                           card.category,
                           darkMode
                         )}`}
                       >
-                        <Sparkles className="h-3 w-3" />
-                        {card.category}
+                        <Sparkles className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{card.category}</span>
                       </span>
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      <div className="flex min-w-0 shrink-0 items-center gap-1.5">
                         {card.segment === 'b2b' && (
                           <span
-                            className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                               darkMode
                                 ? 'bg-[#38251D] text-[#E6A382]'
                                 : 'bg-[#F5E4D7] text-[#8A4626]'
@@ -490,9 +496,9 @@ export default function LibraryView({
                             B2B
                           </span>
                         )}
-                        {card.tag && (
+                        {card.tag && !(card.segment === 'b2b' && isDurationTag(card.tag)) && !isDurationTag(card.tag) && (
                           <span
-                            className={`text-[11px] font-medium ${
+                            className={`max-w-[7rem] truncate text-[11px] font-medium ${
                               darkMode ? 'text-[#8E968C]' : 'text-[#7C7568]'
                             }`}
                           >
