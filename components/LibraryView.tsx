@@ -11,6 +11,10 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Target,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
 } from 'lucide-react';
 
 export type LibrarySegment = 'b2c' | 'b2b' | 'all';
@@ -24,6 +28,48 @@ export interface LibraryCard {
   target_level?: string;
   description: string;
   prompt_trigger: string;
+  intro?: string;
+  goal?: string;
+  steps?: string[];
+  reflection?: string;
+}
+
+interface ExerciseStructure {
+  intro: string;
+  goal: string;
+  steps: string[];
+  reflection: string;
+}
+
+function buildExerciseStructure(card: LibraryCard): ExerciseStructure {
+  const cleanTitle = (card.title || "denna övning").trim();
+  const cleanCategory = (card.category || "utveckling").trim();
+  const cleanDesc = (card.description || "").trim();
+
+  const intro =
+    (card.intro && card.intro.trim()) ||
+    `Du guidas stegvis genom ${cleanTitle.toLowerCase()} inom ${cleanCategory.toLowerCase()} i dialog med FALK – i din egen takt utan krav på perfekta svar.`;
+
+  const goal =
+    (card.goal && card.goal.trim()) ||
+    (cleanDesc
+      ? `Skapa tydlighet och ett konkret nästa steg kring: ${cleanDesc.charAt(0).toLowerCase() + cleanDesc.slice(1)}`
+      : `Få ökad klarhet och en konkret riktning inom ${cleanTitle.toLowerCase()}.`);
+
+  const steps =
+    Array.isArray(card.steps) && card.steps.length > 0
+      ? card.steps.filter((st) => typeof st === "string" && st.trim().length > 0)
+      : [
+          `Utforska nuläget och vad som är viktigast i ${cleanTitle.toLowerCase()} just nu.`,
+          "Identifiera mönster, hinder eller alternativ tillsammans med FALK.",
+          "Formulera ett konkret och rimligt nästa steg att testa i vardagen.",
+        ];
+
+  const reflection =
+    (card.reflection && card.reflection.trim()) ||
+    "Avstämning: Vad blev tydligare för dig under övningen, och vilket litet steg tar du med dig härnäst?";
+
+  return { intro, goal, steps, reflection };
 }
 
 interface LibraryViewProps {
@@ -110,6 +156,11 @@ export default function LibraryView({
   const [selectedCategory, setSelectedCategory] = useState<string>('Alla');
   const [sortBy, setSortBy] = useState<SortOption>('default');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
+
+  const toggleExpandedCard = (cardId: string) => {
+    setExpandedCardIds((prev) => ({ ...prev, [cardId]: !prev[cardId] }));
+  };
 
   useEffect(() => {
     setActiveSegment(initialSegment);
@@ -407,83 +458,166 @@ export default function LibraryView({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredAndSortedCards.map((card) => (
-              <div
-                key={card.id}
-                onClick={() => onStartExercise(card)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onStartExercise(card);
-                  }
-                }}
-                className={`group flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition duration-200 ${
-                  darkMode
-                    ? 'border-[#333A32] bg-[#212620] hover:border-[#A8BFA1] hover:bg-[#262C25]'
-                    : 'border-[#D5C7AC] bg-[#F7F3EA] shadow-sm hover:-translate-y-0.5 hover:border-[#4E5C4B] hover:shadow-md'
-                }`}
-              >
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
-                        card.category,
-                        darkMode
-                      )}`}
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      {card.category}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {card.segment === 'b2b' && (
-                        <span
-                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                            darkMode
-                              ? 'bg-[#38251D] text-[#E6A382]'
-                              : 'bg-[#F5E4D7] text-[#8A4626]'
-                          }`}
-                        >
-                          B2B
-                        </span>
-                      )}
-                      {card.tag && (
-                        <span
-                          className={`text-[11px] font-medium ${
-                            darkMode ? 'text-[#8E968C]' : 'text-[#7C7568]'
-                          }`}
-                        >
-                          {card.tag}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+            {filteredAndSortedCards.map((card) => {
+              const structure = buildExerciseStructure(card);
+              const isExpanded = Boolean(expandedCardIds[card.id]);
 
-                  <h2 className="text-base font-semibold leading-snug">
-                    {card.title}
-                  </h2>
-                  <p
-                    className={`mt-2 text-xs leading-relaxed sm:text-sm ${
-                      darkMode ? 'text-[#B8B2A6]' : 'text-[#4E5C4B]'
-                    }`}
-                  >
-                    {card.description}
-                  </p>
-                </div>
-
+              return (
                 <div
-                  className={`mt-5 flex items-center justify-between border-t pt-3 text-xs font-semibold ${
+                  key={card.id}
+                  onClick={() => onStartExercise(card)}
+                  className={`group flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition duration-200 ${
                     darkMode
-                      ? 'border-[#333A32] text-[#C57B57]'
-                      : 'border-[#E6DCC8] text-[#C57B57]'
+                      ? 'border-[#333A32] bg-[#212620] hover:border-[#A8BFA1] hover:bg-[#262C25]'
+                      : 'border-[#D5C7AC] bg-[#F7F3EA] shadow-sm hover:-translate-y-0.5 hover:border-[#4E5C4B] hover:shadow-md'
                   }`}
                 >
-                  <span>Starta övning med FALK</span>
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  <div>
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
+                          card.category,
+                          darkMode
+                        )}`}
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        {card.category}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {card.segment === 'b2b' && (
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                              darkMode
+                                ? 'bg-[#38251D] text-[#E6A382]'
+                                : 'bg-[#F5E4D7] text-[#8A4626]'
+                            }`}
+                          >
+                            B2B
+                          </span>
+                        )}
+                        {card.tag && (
+                          <span
+                            className={`text-[11px] font-medium ${
+                              darkMode ? 'text-[#8E968C]' : 'text-[#7C7568]'
+                            }`}
+                          >
+                            {card.tag}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <h2 className="text-base font-semibold leading-snug">
+                      {card.title}
+                    </h2>
+                    <p
+                      className={`mt-2 text-xs leading-relaxed sm:text-sm ${
+                        darkMode ? 'text-[#B8B2A6]' : 'text-[#4E5C4B]'
+                      }`}
+                    >
+                      {card.description}
+                    </p>
+
+                    <div
+                      className={`mt-3 rounded-xl border p-3 text-xs ${
+                        darkMode
+                          ? 'border-[#2F372E] bg-[#1B1F1A] text-[#D8D2C5]'
+                          : 'border-[#E5DAC4] bg-[#F2ECE0] text-[#2F382E]'
+                      }`}
+                    >
+                      <p className="leading-relaxed">
+                        <span className="font-semibold">Inledning: </span>
+                        {structure.intro}
+                      </p>
+                      <p className="mt-1.5 flex items-start gap-1.5 leading-relaxed">
+                        <Target
+                          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                            darkMode ? 'text-[#A8BFA1]' : 'text-[#4E5C4B]'
+                          }`}
+                        />
+                        <span>
+                          <span className="font-semibold">Mål: </span>
+                          {structure.goal}
+                        </span>
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpandedCard(card.id);
+                      }}
+                      className={`mt-2.5 inline-flex items-center gap-1 text-xs font-medium transition ${
+                        darkMode
+                          ? 'text-[#A8BFA1] hover:text-white'
+                          : 'text-[#4E5C4B] hover:text-[#1F241E]'
+                      }`}
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp className="h-3.5 w-3.5" />
+                          <span>Dölj struktur & avstämning</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          <span>Visa struktur ({structure.steps.length} steg)</span>
+                        </>
+                      )}
+                    </button>
+
+                    {isExpanded && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className={`mt-2.5 cursor-default space-y-2.5 rounded-xl border p-3 text-xs ${
+                          darkMode
+                            ? 'border-[#2F372E] bg-[#191D18] text-[#CFC9BC]'
+                            : 'border-[#E5DAC4] bg-[#EFE8DA] text-[#2F382E]'
+                        }`}
+                      >
+                        <div>
+                          <p className="font-semibold">Målstyrd struktur:</p>
+                          <ol className="mt-1 list-decimal space-y-1 pl-4 leading-relaxed">
+                            {structure.steps.map((step, idx) => (
+                              <li key={idx}>{step}</li>
+                            ))}
+                          </ol>
+                        </div>
+                        <div
+                          className={`flex items-start gap-1.5 border-t pt-2 leading-relaxed ${
+                            darkMode ? 'border-[#2F372E]' : 'border-[#DDD1BC]'
+                          }`}
+                        >
+                          <CheckCircle2
+                            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                              darkMode ? 'text-[#A8BFA1]' : 'text-[#4E5C4B]'
+                            }`}
+                          />
+                          <span>{structure.reflection}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartExercise(card);
+                    }}
+                    className={`mt-5 flex w-full items-center justify-between border-t pt-3 text-left text-xs font-semibold transition ${
+                      darkMode
+                        ? 'border-[#333A32] text-[#C57B57] hover:text-[#D88E6A]'
+                        : 'border-[#E6DCC8] text-[#C57B57] hover:text-[#A96240]'
+                    }`}
+                  >
+                    <span>Starta övning med FALK</span>
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
