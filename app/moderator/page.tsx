@@ -347,6 +347,7 @@ function downloadFinalCompassPdf(params: {
 export default function ModeratorPage() {
   const router = useRouter();
   const [hasPremiumSession, setHasPremiumSession] = useState<boolean>(false);
+  const [hasB2BAccess, setHasB2BAccess] = useState<boolean>(false);
 
   useEffect(() => {
     let active = true;
@@ -380,6 +381,7 @@ export default function ModeratorPage() {
           resolvedAccountName = user.email.split("@")[0].trim();
         }
         let isPrem = false;
+        let isB2B = false;
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('*')
@@ -395,8 +397,27 @@ export default function ModeratorPage() {
             resolvedAccountName = profName.trim();
           }
         }
+        try {
+          const { data: orgMember, error: orgError } = await supabase
+            .from('org_members')
+            .select('id, status')
+            .eq('user_id', user.id)
+            .limit(5);
+          if (!orgError && Array.isArray(orgMember)) {
+            isB2B = orgMember.some((m: Record<string, unknown>) => {
+              const st = String(m?.status || 'active').toLowerCase();
+              return st !== 'revoked' && st !== 'inactive';
+            });
+          }
+        } catch {
+          isB2B = false;
+        }
         if (active) {
           setHasPremiumSession(isPrem);
+          setHasB2BAccess(isB2B);
+          if (!isB2B) {
+            setContextMode('private');
+          }
           if (resolvedAccountName) {
             setParticipants((prev) =>
               prev.map((entry, i) => (i === 0 && entry === "Deltagare 1" ? resolvedAccountName : entry))
@@ -404,7 +425,11 @@ export default function ModeratorPage() {
           }
         }
       } catch {
-        if (active) setHasPremiumSession(false);
+        if (active) {
+          setHasPremiumSession(false);
+          setHasB2BAccess(false);
+          setContextMode('private');
+        }
       }
     }
     checkHostAuth();
@@ -1452,9 +1477,9 @@ export default function ModeratorPage() {
               })}
             </div>
 
-            {/* Kontext-switch när inget rum är skapat ännu */}
+            {/* Kontext-switch när inget rum är skapat ännu (Organisation / Team enbart för B2B) */}
             {!roomCode && hasPremiumSession && (
-              <div className="inline-flex rounded-full bg-[#E8DCC4] p-0.5 border border-[#1F241D]/10 text-[11px]">
+              <div className="inline-flex items-center rounded-full bg-[#E8DCC4] p-0.5 border border-[#1F241D]/10 text-[11px]">
                 <button
                   type="button"
                   onClick={() => setContextMode('private')}
@@ -1468,14 +1493,26 @@ export default function ModeratorPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setContextMode('b2b')}
+                  disabled={!hasB2BAccess}
+                  onClick={() => {
+                    if (hasB2BAccess) {
+                      setContextMode('b2b');
+                    }
+                  }}
+                  title={
+                    hasB2BAccess
+                      ? 'Växla till Organisation / Team'
+                      : 'Organisation / Team är endast tillgängligt för B2B-användare'
+                  }
                   className={`px-2.5 py-0.5 rounded-full transition ${
-                    contextMode === 'b2b'
-                      ? 'bg-white text-[#1F241D] font-medium shadow-xs'
-                      : 'text-[#1F241D]/65'
+                    !hasB2BAccess
+                      ? 'text-[#1F241D]/40 cursor-not-allowed'
+                      : contextMode === 'b2b'
+                        ? 'bg-white text-[#1F241D] font-medium shadow-xs'
+                        : 'text-[#1F241D]/65'
                   }`}
                 >
-                  Organisation / Team
+                  Organisation / Team{!hasB2BAccess ? ' · B2B' : ''}
                 </button>
               </div>
             )}
@@ -2000,66 +2037,6 @@ export default function ModeratorPage() {
       {/* Chattflöde + Perspektivtriangel + The Final Compass™ */}
       <main className="flex-1 overflow-y-auto px-4 py-5">
         <div className="max-w-3xl mx-auto space-y-4">
-          {/* Perspektivtriangeln (Fågelperspektivet) */}
-          <div className="rounded-2xl bg-[#F5EFE4] border border-[#1F241D]/12 p-4 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Compass className="w-4 h-4 text-[#C57B57]" />
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-[#1F241D]">
-                  Perspektivtriangeln · Fågelperspektivet
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTriangle((v) => !v)}
-                className="text-[11px] text-[#1F241D]/65 hover:text-[#1F241D]"
-              >
-                {showTriangle ? 'Dölj' : 'Visa'}
-              </button>
-            </div>
-
-            {showTriangle && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                <div className="rounded-xl bg-white/85 p-3 border border-[#1F241D]/8">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#4E5C4B]">
-                    {part1Label}s behov
-                  </span>
-                  <p className="mt-1 text-[#1F241D]/85 leading-relaxed">
-                    {activeMeta.perspective_triangle.part_1_need ||
-                      'FALK lyssnar efter underliggande behov under samtalets gång...'}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-white/85 p-3 border border-[#1F241D]/8">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#C57B57]">
-                    {part2Label}s behov
-                  </span>
-                  <p className="mt-1 text-[#1F241D]/85 leading-relaxed">
-                    {activeMeta.perspective_triangle.part_2_need ||
-                      'FALK lyssnar efter underliggande behov under samtalets gång...'}
-                  </p>
-                </div>
-
-                <div className="sm:col-span-2 rounded-xl bg-[#4E5C4B]/8 p-3 border border-[#4E5C4B]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#4E5C4B]">
-                      Gemensam grund & riktning
-                    </span>
-                    <p className="mt-0.5 text-[#1F241D] font-medium">
-                      {activeMeta.perspective_triangle.shared_ground ||
-                        'Ömsesidig respekt och vilja att förstå varandra klarare.'}
-                    </p>
-                  </div>
-                  {activeMeta.perspective_triangle.core_question && (
-                    <div className="sm:max-w-xs text-[11px] text-[#1F241D]/80 italic border-t sm:border-t-0 sm:border-l border-[#1F241D]/15 pt-2 sm:pt-0 sm:pl-3">
-                      “{activeMeta.perspective_triangle.core_question}”
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Meddelanden */}
           {activeMessages.map((msg) => {
             const isFalk = msg.sender === 'falk';
@@ -2222,24 +2199,6 @@ export default function ModeratorPage() {
       {/* Skrivfält & Avslut med The Final Compass™ */}
       <footer className="sticky bottom-0 bg-[#E8DCC4] border-t border-[#1F241D]/10 px-4 py-3">
         <div className="max-w-3xl mx-auto space-y-2">
-          {activeMessages.length >= 3 && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => handleSendMessage(undefined, true)}
-                disabled={isGeneratingCompass || isSending}
-                className="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1 rounded-full bg-[#F5EFE4] hover:bg-white text-[#1F241D] border border-[#1F241D]/15 transition disabled:opacity-40"
-              >
-                <Compass className="w-3.5 h-3.5 text-[#C57B57]" />
-                <span>
-                  {isGeneratingCompass
-                    ? 'Skapar The Final Compass™...'
-                    : 'Avsluta & skapa The Final Compass™'}
-                </span>
-              </button>
-            </div>
-          )}
-
           {(speakingMessageId || isSharedOutOfTurn) && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px]">
               {speakingMessageId ? (
@@ -2268,16 +2227,6 @@ export default function ModeratorPage() {
             onSubmit={(e) => handleSendMessage(e, false)}
             className="flex items-center gap-2 bg-white rounded-full px-3.5 py-2 shadow-xs border border-[#1F241D]/10"
           >
-            <span
-              className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${
-                roomData && viewerRole === 'part_2'
-                  ? 'bg-[#C57B57]/15 text-[#C57B57]'
-                  : 'bg-[#4E5C4B]/10 text-[#4E5C4B]'
-              }`}
-            >
-              {activeSpeaker}
-            </span>
-
             <button
               type="button"
               onClick={handleToggleMic}
