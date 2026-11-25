@@ -16,6 +16,7 @@ import {
   LogIn,
   LogOut,
   Lock,
+  Users,
   Lightbulb,
   Clock,
   ExternalLink,
@@ -60,6 +61,7 @@ interface SideDrawersProps {
   activeView: MainView;
   onSelectView: (view: MainView) => void;
   isLoggedIn: boolean;
+  isGuest: boolean;
   isPremium: boolean;
   isDarkMode?: boolean;
   conversations: DrawerConversation[];
@@ -129,6 +131,7 @@ export default function SideDrawers({
   activeView,
   onSelectView,
   isLoggedIn,
+  isGuest,
   isPremium,
   isDarkMode = false,
   conversations,
@@ -258,6 +261,24 @@ export default function SideDrawers({
                   <MessageSquare className="h-4 w-4" />
                   Chatt
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isGuest || !isPremium) {
+                    onOpenPaywall('FALK Moderator (neutral samtalsledare för relationer och team) ingår i FALK Premium.');
+                    return;
+                  }
+                  onCloseLeft();
+                  window.location.href = '/moderator';
+                }}
+                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm font-medium opacity-85 hover:opacity-100 hover:bg-black/5 transition"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Users className="h-4 w-4" />
+                  Samtalsrum
+                </span>
+                {(isGuest || !isPremium) && <Lock className="h-3.5 w-3.5 text-[#C57B57]" />}
               </button>
 
               <button

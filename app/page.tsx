@@ -62,6 +62,20 @@ const FOCUS_KEYS: (keyof FocusSliders)[] = [
   'Motivation',
 ];
 
+function renderFormattedBoldText(text: string): React.ReactNode {
+  const parts = text.split(/(\*{2}[^*]+\*{2})/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return (
+        <strong key={i} className="font-bold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
 function getOrCreateGuestUuid(): string {
   if (typeof window === 'undefined') return '';
   let id = localStorage.getItem('falk_guest_uuid');
@@ -1639,9 +1653,20 @@ export default function FalkHomePage() {
                   <X className="w-4 h-4" />
                 </button>
 
-                <div className="flex items-center gap-2 text-xs font-semibold tracking-wider uppercase text-[#C57B57] mb-2">
-                  <Compass className="w-4 h-4" />
-                  <span>KORSNINGEN / DIN NAVIGATIONSSTART</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold tracking-wider uppercase text-[#C57B57]">
+                    <Compass className="w-4 h-4" />
+                    <span>KORSNINGEN / DIN NAVIGATIONSSTART</span>
+                  </div>
+                  <span
+                    className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                      darkMode
+                        ? 'bg-[#2B2925] border-[#44413A] text-[#E8DCC4]'
+                        : 'bg-white border-[#DFD4BE] text-[#4E5C4B]'
+                    }`}
+                  >
+                    Läge: Enskilt samtal
+                  </span>
                 </div>
 
                 <h1 className="text-lg sm:text-xl font-bold mb-2">
@@ -1667,10 +1692,8 @@ export default function FalkHomePage() {
                     }}
                     className="px-4 py-2.5 rounded-xl bg-[#4E5C4B] hover:bg-[#3F4B3D] text-white text-sm font-medium transition shadow-sm"
                   >
-                    Starta Kompasskalibrering™ →
+                    Starta kompasskalibrering
                   </button>
-
-
                 </div>
               </section>
             )}
@@ -1686,7 +1709,7 @@ export default function FalkHomePage() {
                       darkMode ? "text-[#C57B57] hover:text-[#E8DCC4]" : "text-[#4E5C4B] hover:opacity-80"
                     }`}
                   >
-                    <span>🧭 Compass Sessions™ (Guidade mentorsessioner)</span>
+                    <span>🧭 Kompass-sessioner™ (Guidade mentorsessioner)</span>
                     <span>{showSessionsDrawer ? "▲" : "▼"}</span>
                   </button>
                   {sessionMode && (
@@ -1715,7 +1738,7 @@ export default function FalkHomePage() {
                             }
                             setSessionMode(opt.id);
                             setShowWelcomeCard(false);
-                            handleSendMessage(`Jag vill starta en guidad Compass Session: ${opt.title} (${opt.duration}).`);
+                            handleSendMessage(`Jag vill starta en guidad Kompass-session: ${opt.title} (${opt.duration}).`);
                           }}
                           className={`text-left p-3.5 rounded-2xl border transition ${
                             active
@@ -1775,7 +1798,7 @@ export default function FalkHomePage() {
               <div className="mb-3 px-1 flex flex-wrap items-center justify-between gap-2">
                 {sessionMode ? (
                   <span className="text-xs px-2.5 py-1 rounded-full bg-[#4E5C4B]/15 text-[#4E5C4B] dark:text-[#A8BFA1] font-medium">
-                    🧭 Aktiv Compass Session: {COMPASS_SESSION_OPTIONS.find((o) => o.id === sessionMode)?.title || sessionMode}
+                    🧭 Aktiv Kompass-session: {COMPASS_SESSION_OPTIONS.find((o) => o.id === sessionMode)?.title || sessionMode}
                   </span>
                 ) : (
                   <span />
@@ -1844,7 +1867,7 @@ export default function FalkHomePage() {
                           : 'bg-white border-[#E4DAC7] text-[#1C1C1C]'
                       }`}
                     >
-                      <div className="whitespace-pre-wrap">{displayContent}</div>
+                      <div className="whitespace-pre-wrap">{renderFormattedBoldText(displayContent)}</div>
 
                       {/* Klickbara notisbrickor/badges per utvecklingsområde efter kompasskalibrering */}
                       {msg.areaBadges && msg.areaBadges.length > 0 && (
@@ -2541,6 +2564,7 @@ export default function FalkHomePage() {
         activeView={activeView}
         onSelectView={(v) => setActiveView(v)}
         isLoggedIn={!isGuest}
+        isGuest={isGuest}
         isPremium={isPremium}
         isDarkMode={darkMode}
         conversations={conversations}
