@@ -7,14 +7,14 @@ import {
   BookOpen,
   Compass,
   Filter,
+  Info,
   Loader2,
   RefreshCw,
   Search,
   Sparkles,
   Target,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
+  X,
 } from 'lucide-react';
 
 export type LibrarySegment = 'b2c' | 'b2b' | 'all';
@@ -156,11 +156,7 @@ export default function LibraryView({
   const [selectedCategory, setSelectedCategory] = useState<string>('Alla');
   const [sortBy, setSortBy] = useState<SortOption>('default');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
-
-  const toggleExpandedCard = (cardId: string) => {
-    setExpandedCardIds((prev) => ({ ...prev, [cardId]: !prev[cardId] }));
-  };
+  const [infoCard, setInfoCard] = useState<LibraryCard | null>(null);
 
   useEffect(() => {
     setActiveSegment(initialSegment);
@@ -241,6 +237,8 @@ export default function LibraryView({
     }
     return filtered;
   }, [cards, selectedCategory, sortBy, searchQuery]);
+
+  const infoStructure = infoCard ? buildExerciseStructure(infoCard) : null;
 
   return (
     <div
@@ -459,9 +457,6 @@ export default function LibraryView({
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredAndSortedCards.map((card) => {
-              const structure = buildExerciseStructure(card);
-              const isExpanded = Boolean(expandedCardIds[card.id]);
-
               return (
                 <div
                   key={card.id}
@@ -504,6 +499,22 @@ export default function LibraryView({
                             {card.tag}
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInfoCard(card);
+                          }}
+                          aria-label={`Visa inledning och struktur för ${card.title}`}
+                          title="Inledning och struktur"
+                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                            darkMode
+                              ? 'border-[#333A32] bg-[#1B1F1A] text-[#A8BFA1] hover:border-[#A8BFA1] hover:text-white'
+                              : 'border-[#D5C7AC] bg-[#F2ECE0] text-[#4E5C4B] hover:border-[#4E5C4B] hover:text-[#1F241E]'
+                          }`}
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
 
@@ -517,87 +528,6 @@ export default function LibraryView({
                     >
                       {card.description}
                     </p>
-
-                    <div
-                      className={`mt-3 rounded-xl border p-3 text-xs ${
-                        darkMode
-                          ? 'border-[#2F372E] bg-[#1B1F1A] text-[#D8D2C5]'
-                          : 'border-[#E5DAC4] bg-[#F2ECE0] text-[#2F382E]'
-                      }`}
-                    >
-                      <p className="leading-relaxed">
-                        <span className="font-semibold">Inledning: </span>
-                        {structure.intro}
-                      </p>
-                      <p className="mt-1.5 flex items-start gap-1.5 leading-relaxed">
-                        <Target
-                          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                            darkMode ? 'text-[#A8BFA1]' : 'text-[#4E5C4B]'
-                          }`}
-                        />
-                        <span>
-                          <span className="font-semibold">Mål: </span>
-                          {structure.goal}
-                        </span>
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpandedCard(card.id);
-                      }}
-                      className={`mt-2.5 inline-flex items-center gap-1 text-xs font-medium transition ${
-                        darkMode
-                          ? 'text-[#A8BFA1] hover:text-white'
-                          : 'text-[#4E5C4B] hover:text-[#1F241E]'
-                      }`}
-                    >
-                      {isExpanded ? (
-                        <>
-                          <ChevronUp className="h-3.5 w-3.5" />
-                          <span>Dölj struktur & avstämning</span>
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                          <span>Visa struktur ({structure.steps.length} steg)</span>
-                        </>
-                      )}
-                    </button>
-
-                    {isExpanded && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className={`mt-2.5 cursor-default space-y-2.5 rounded-xl border p-3 text-xs ${
-                          darkMode
-                            ? 'border-[#2F372E] bg-[#191D18] text-[#CFC9BC]'
-                            : 'border-[#E5DAC4] bg-[#EFE8DA] text-[#2F382E]'
-                        }`}
-                      >
-                        <div>
-                          <p className="font-semibold">Målstyrd struktur:</p>
-                          <ol className="mt-1 list-decimal space-y-1 pl-4 leading-relaxed">
-                            {structure.steps.map((step, idx) => (
-                              <li key={idx}>{step}</li>
-                            ))}
-                          </ol>
-                        </div>
-                        <div
-                          className={`flex items-start gap-1.5 border-t pt-2 leading-relaxed ${
-                            darkMode ? 'border-[#2F372E]' : 'border-[#DDD1BC]'
-                          }`}
-                        >
-                          <CheckCircle2
-                            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                              darkMode ? 'text-[#A8BFA1]' : 'text-[#4E5C4B]'
-                            }`}
-                          />
-                          <span>{structure.reflection}</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <button
@@ -621,6 +551,141 @@ export default function LibraryView({
           </div>
         )}
       </div>
+
+      {infoCard && infoStructure && (
+        <div
+          onClick={() => setInfoCard(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="library-info-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[1px]"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border p-6 shadow-xl ${
+              darkMode
+                ? 'border-[#333A32] bg-[#212620] text-[#F2EDE4]'
+                : 'border-[#D5C7AC] bg-[#F7F3EA] text-[#1F241E]'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getCategoryBadgeClasses(
+                    infoCard.category,
+                    darkMode
+                  )}`}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {infoCard.category}
+                </span>
+                <h2 id="library-info-title" className="mt-2 text-lg font-semibold">
+                  {infoCard.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInfoCard(null)}
+                aria-label="Stäng information"
+                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition ${
+                  darkMode
+                    ? 'border-[#333A32] bg-[#1B1F1A] text-[#B8B2A6] hover:text-white'
+                    : 'border-[#D5C7AC] bg-[#F2ECE0] text-[#4E5C4B] hover:text-[#1F241E]'
+                }`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3.5 text-xs sm:text-sm">
+              <div
+                className={`rounded-xl border p-3.5 ${
+                  darkMode
+                    ? 'border-[#2F372E] bg-[#1B1F1A] text-[#D8D2C5]'
+                    : 'border-[#E5DAC4] bg-[#F2ECE0] text-[#2F382E]'
+                }`}
+              >
+                <p className="font-semibold">Inledning</p>
+                <p className="mt-1 leading-relaxed">{infoStructure.intro}</p>
+              </div>
+
+              <div
+                className={`rounded-xl border p-3.5 ${
+                  darkMode
+                    ? 'border-[#2F372E] bg-[#1B1F1A] text-[#D8D2C5]'
+                    : 'border-[#E5DAC4] bg-[#F2ECE0] text-[#2F382E]'
+                }`}
+              >
+                <p className="flex items-center gap-1.5 font-semibold">
+                  <Target
+                    className={`h-4 w-4 shrink-0 ${
+                      darkMode ? 'text-[#A8BFA1]' : 'text-[#4E5C4B]'
+                    }`}
+                  />
+                  <span>Mål</span>
+                </p>
+                <p className="mt-1 leading-relaxed">{infoStructure.goal}</p>
+              </div>
+
+              <div
+                className={`rounded-xl border p-3.5 ${
+                  darkMode
+                    ? 'border-[#2F372E] bg-[#1B1F1A] text-[#D8D2C5]'
+                    : 'border-[#E5DAC4] bg-[#F2ECE0] text-[#2F382E]'
+                }`}
+              >
+                <p className="font-semibold">Struktur ({infoStructure.steps.length} steg)</p>
+                <ol className="mt-1.5 list-decimal space-y-1.5 pl-4 leading-relaxed">
+                  {infoStructure.steps.map((step, idx) => (
+                    <li key={idx}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+
+              <div
+                className={`flex items-start gap-2 rounded-xl border p-3.5 leading-relaxed ${
+                  darkMode
+                    ? 'border-[#2F372E] bg-[#191D18] text-[#CFC9BC]'
+                    : 'border-[#E5DAC4] bg-[#EFE8DA] text-[#2F382E]'
+                }`}
+              >
+                <CheckCircle2
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${
+                    darkMode ? 'text-[#A8BFA1]' : 'text-[#4E5C4B]'
+                  }`}
+                />
+                <span>{infoStructure.reflection}</span>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2.5 border-t pt-4 border-[#E5DAC4] dark:border-[#2F372E]">
+              <button
+                type="button"
+                onClick={() => setInfoCard(null)}
+                className={`rounded-xl border px-4 py-2 text-xs font-medium transition ${
+                  darkMode
+                    ? 'border-[#333A32] bg-[#1B1F1A] text-[#CFC9BC] hover:text-white'
+                    : 'border-[#D5C7AC] bg-[#F2ECE0] text-[#3B4239] hover:bg-[#EAE1D0]'
+                }`}
+              >
+                Stäng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const selected = infoCard;
+                  setInfoCard(null);
+                  onStartExercise(selected);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#C57B57] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+              >
+                <span>Starta övning med FALK</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
