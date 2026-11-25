@@ -446,6 +446,9 @@ export default function ModeratorPage() {
 
   // Samtalskontext (Privat relation eller B2B organisation)
   const [contextMode, setContextMode] = useState<'private' | 'b2b'>('private');
+  const [b2bFramework, setB2bFramework] = useState<'mandate' | 'difficult' | 'alignment'>('mandate');
+  const [showCoreSummary, setShowCoreSummary] = useState<boolean>(false);
+  const [participantReady, setParticipantReady] = useState<boolean>(false);
 
   // Deltagare i lokalt läge (samma enhet)
   const [participants, setParticipants] = useState<string[]>([
@@ -1218,6 +1221,25 @@ export default function ModeratorPage() {
     setInput('');
   };
 
+  function buildSafeSendSuggestion(rawText: string, mode: 'private' | 'b2b', framework: 'mandate' | 'difficult' | 'alignment'): string | null {
+    const clean = rawText.trim();
+    if (clean.length < 12) return null;
+    const sharpPattern = /\b(du alltid|du aldrig|sluta|varför gör du|det är ditt fel|du bryr dig inte|alltid så här|aldrig lyssnar)\b/i;
+    if (!sharpPattern.test(clean)) return null;
+    if (mode === 'b2b') {
+      if (framework === 'mandate') {
+        return `Jag upplever att vi behöver tydligare mandat och roller kring det här – hur ser vi på ansvarsfördelningen framåt? (${clean.replace(/^du\s+/i, '')})`;
+      }
+      if (framework === 'alignment') {
+        return `Jag vill gärna stämma av vår gemensamma riktning här så vi drar åt samma håll: ${clean.replace(/^du\s+/i, '')}`;
+      }
+      return `Jag vill ta upp det här sakligt och konstruktivt för att hitta en bra lösning i teamet: ${clean.replace(/^du\s+/i, '')}`;
+    }
+    return `Jag känner att det här är viktigt för mig och vill gärna förstå varandra bättre – jag upplever att ${clean.replace(/^du\s+/i, '')}`;
+  }
+
+  const safeSendSuggestion = buildSafeSendSuggestion(input, contextMode, b2bFramework);
+
   // Skicka meddelande (antingen till delat rum eller lokalt /api/chat)
   const handleSendMessage = async (e?: React.FormEvent, requestFinalCompass = false) => {
     if (e) e.preventDefault();
@@ -1558,6 +1580,48 @@ export default function ModeratorPage() {
                     : `Ordet hos: ${turnOwnerName}`}
                 </span>
               </span>
+              {!roomCode && hasB2BAccess && contextMode === 'b2b' && (
+                <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-[#E8DCC4]/80 px-2 py-0.5 border border-[#1F241D]/10">
+                  {(
+                    [
+                      ['mandate', 'Mandat & beslut'],
+                      ['difficult', 'Svårt samtal'],
+                      ['alignment', 'Teamjustering'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setB2bFramework(key)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] transition ${
+                        b2bFramework === key
+                          ? 'bg-[#4E5C4B] text-white font-medium'
+                          : 'text-[#1F241D]/70 hover:text-[#1F241D]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setParticipantReady((v) => !v)}
+                className={`px-2 py-0.5 rounded-full text-[10px] border transition ${
+                  participantReady
+                    ? 'bg-[#4E5C4B]/15 border-[#4E5C4B]/30 text-[#1F241D] font-medium'
+                    : 'bg-white/70 border-[#1F241D]/10 text-[#1F241D]/65 hover:text-[#1F241D]'
+                }`}
+              >
+                {participantReady ? 'Redo att gå vidare ✓' : 'Markera redo'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCoreSummary((v) => !v)}
+                className="px-2 py-0.5 rounded-full text-[10px] bg-white/70 border border-[#1F241D]/10 text-[#1F241D]/70 hover:text-[#1F241D] transition"
+              >
+                {showCoreSummary ? 'Dölj samtalskärna' : 'Samtalskärna'}
+              </button>
               {activeMeta.next_speaker && (
                 <span className="text-[#1F241D]/70">
                   FALK leder nästa steg: <strong>{activeMeta.next_speaker}</strong>
@@ -2199,6 +2263,51 @@ export default function ModeratorPage() {
       {/* Skrivfält & Avslut med The Final Compass™ */}
       <footer className="sticky bottom-0 bg-[#E8DCC4] border-t border-[#1F241D]/10 px-4 py-3">
         <div className="max-w-3xl mx-auto space-y-2">
+          {showCoreSummary && (
+            <div className="rounded-xl bg-[#F5EFE4] border border-[#1F241D]/12 px-3.5 py-2.5 text-xs text-[#1F241D] space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#4E5C4B]">
+                  Samtalskärna · {contextMode === 'b2b' && hasB2BAccess ? `B2B (${b2bFramework})` : 'Privat / Relation'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowCoreSummary(false)}
+                  className="text-[10px] text-[#1F241D]/60 hover:text-[#1F241D]"
+                >
+                  Stäng
+                </button>
+              </div>
+              <p className="text-[#1F241D]/85">
+                {activeMeta.compass_summary?.understood ||
+                  activeMeta.perspective_triangle?.shared_ground ||
+                  'Fokus på tydlig turordning, lyssnande och nästa konkreta steg.'}
+              </p>
+              {activeMeta.compass_summary?.next_steps?.length ? (
+                <p className="text-[11px] text-[#4E5C4B] font-medium">
+                  Nästa steg: {activeMeta.compass_summary.next_steps[0]}
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {safeSendSuggestion && (
+            <div className="rounded-xl bg-white/95 border border-[#C57B57]/35 px-3.5 py-2 text-xs text-[#1F241D] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9c5a38]">
+                  Safe-Send förslag (mjukare formulering)
+                </span>
+                <p className="text-[#1F241D]/85 leading-snug">{safeSendSuggestion}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInput(safeSendSuggestion)}
+                className="shrink-0 text-[11px] font-medium px-3 py-1 rounded-full bg-[#4E5C4B] text-white hover:bg-[#3f4b3c] transition"
+              >
+                Använd spegling
+              </button>
+            </div>
+          )}
+
           {(speakingMessageId || isSharedOutOfTurn) && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px]">
               {speakingMessageId ? (
