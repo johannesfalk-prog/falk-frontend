@@ -130,6 +130,48 @@ export default function B2BPortalPage() {
   const [editDepartment, setEditDepartment] = useState<string>("");
   const [savingMember, setSavingMember] = useState(false);
   const [revokingMemberId, setRevokingMemberId] = useState<string | null>(null);
+  const [pulseTitle, setPulseTitle] = useState("Veckans Team- & Riktningpuls");
+  const [pulseQuestions, setPulseQuestions] = useState<string[]>([
+    "Hur tydlig är prioriteringen och riktningen i ditt arbete just nu?",
+    "Hur upplever du balansen mellan tempo, fokus och återhämtning?",
+    "Vad behöver vi förtydliga eller justera tillsammans kommande vecka?",
+  ]);
+  const [newPulseQuestion, setNewPulseQuestion] = useState("");
+  const [pulseFrequency, setPulseFrequency] = useState<"once" | "weekly" | "daily">("once");
+  const [pulseRemindAt, setPulseRemindAt] = useState("");
+  const [pulseTargetAll, setPulseTargetAll] = useState(true);
+  const [selectedPulseMemberIds, setSelectedPulseMemberIds] = useState<string[]>([]);
+  const [dispatchingPulse, setDispatchingPulse] = useState(false);
+  const [jointPulseOpen, setJointPulseOpen] = useState(false);
+  const [jointPulseAnswers, setJointPulseAnswers] = useState<Record<number, string>>({});
+  const [jointPulseNotes, setJointPulseNotes] = useState("");
+  const [jointPulseSummary, setJointPulseSummary] = useState("");
+  const [salaryRole, setSalaryRole] = useState<"employer" | "employee">("employer");
+  const [salaryQuestions, setSalaryQuestions] = useState<{
+    employer: string[];
+    employee: string[];
+  }>({
+    employer: [
+      "Hur tydligt har medarbetarens leverans, ansvar och bidrag till helheten varit under perioden?",
+      "Hur förhåller sig nuvarande lön och ersättningsstruktur till rollens ansvar, marknadsläge och intern balans?",
+      "Vilka konkreta förväntningar, mål eller utvecklingssteg behöver vara tydliga inför nästa period?",
+    ],
+    employee: [
+      "Vilka konkreta resultat, ansvarstaganden och bidrag vill jag lyfta fram från perioden som gått?",
+      "Hur har min roll och mitt ansvar utvecklats i förhållande till min nuvarande lön och villkor?",
+      "Vilka förväntningar, mandat eller utvecklingsmål driver min riktning och motivation framåt?",
+    ],
+  });
+  const [newSalaryQuestion, setNewSalaryQuestion] = useState("");
+  const [salaryAnswers, setSalaryAnswers] = useState<{
+    employer: Record<number, string>;
+    employee: Record<number, string>;
+  }>({
+    employer: {},
+    employee: {},
+  });
+  const [salarySummary, setSalarySummary] = useState("");
+  const [copiedSalarySummary, setCopiedSalarySummary] = useState(false);
 
   const loadOrganizationData = useCallback(
     async (dept: string = "") => {
@@ -384,6 +426,140 @@ export default function B2BPortalPage() {
     } finally {
       setSavingMember(false);
     }
+  };
+
+  const handleAddPulseQuestion = () => {
+    const trimmed = newPulseQuestion.trim();
+    if (!trimmed) return;
+    setPulseQuestions((prev) => [...prev, trimmed]);
+    setNewPulseQuestion("");
+  };
+
+  const handleUpdatePulseQuestion = (idx: number, val: string) => {
+    setPulseQuestions((prev) => prev.map((q, i) => (i === idx ? val : q)));
+  };
+
+  const handleRemovePulseQuestion = (idx: number) => {
+    setPulseQuestions((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+  };
+
+  const handleDispatchPulseToReminders = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDispatchingPulse(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const cleanQs = pulseQuestions.map((q) => q.trim()).filter(Boolean);
+      if (cleanQs.length === 0) {
+        throw new Error("Lägg till minst en pulsmätningsfråga.");
+      }
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/b2b/org/pulse-dispatch`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          org_id: orgInfo?.id,
+          title: pulseTitle.trim() || "Team-pulsmätning",
+          questions: cleanQs,
+          frequency: pulseFrequency,
+          remind_at: pulseRemindAt ? new Date(pulseRemindAt).toISOString() : null,
+          member_ids: pulseTargetAll ? null : selectedPulseMemberIds,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Kunde inte skicka ut pulsmätningen till Påminnelser.");
+      }
+      setSuccessMsg(
+        `Pulsmätningen skickades till Påminnelser (${data.dispatched_count ?? 0} mottagare).`
+      );
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Fel vid utskick av pulsmätning.");
+    } finally {
+      setDispatchingPulse(false);
+    }
+  };
+
+  const handleAddSalaryQuestion = () => {
+    const trimmed = newSalaryQuestion.trim();
+    if (!trimmed) return;
+    setSalaryQuestions((prev) => ({
+      ...prev,
+      [salaryRole]: [...prev[salaryRole], trimmed],
+    }));
+    setNewSalaryQuestion("");
+  };
+
+  const handleUpdateSalaryQuestion = (idx: number, val: string) => {
+    setSalaryQuestions((prev) => ({
+      ...prev,
+      [salaryRole]: prev[salaryRole].map((q, i) => (i === idx ? val : q)),
+    }));
+  };
+
+  const handleRemoveSalaryQuestion = (idx: number) => {
+    setSalaryQuestions((prev) => {
+      if (prev[salaryRole].length <= 1) return prev;
+      return {
+        ...prev,
+        [salaryRole]: prev[salaryRole].filter((_, i) => i !== idx),
+      };
+    });
+  };
+
+  const handleResetSalaryQuestions = () => {
+    setSalaryQuestions((prev) => ({
+      ...prev,
+      [salaryRole]:
+        salaryRole === "employer"
+          ? [
+              "Hur tydligt har medarbetarens leverans, ansvar och bidrag till helheten varit under perioden?",
+              "Hur förhåller sig nuvarande lön och ersättningsstruktur till rollens ansvar, marknadsläge och intern balans?",
+              "Vilka konkreta förväntningar, mål eller utvecklingssteg behöver vara tydliga inför nästa period?",
+            ]
+          : [
+              "Vilka konkreta resultat, ansvarstaganden och bidrag vill jag lyfta fram från perioden som gått?",
+              "Hur har min roll och mitt ansvar utvecklats i förhållande till min nuvarande lön och villkor?",
+              "Vilka förväntningar, mandat eller utvecklingsmål driver min riktning och motivation framåt?",
+            ],
+    }));
+  };
+
+  const handleGenerateSalarySummary = () => {
+    const roleLabel = salaryRole === "employer" ? "Arbetsgivare / Chef" : "Medarbetare";
+    const qs = salaryQuestions[salaryRole].map((q) => q.trim()).filter(Boolean);
+    const ansMap = salaryAnswers[salaryRole] || {};
+    const items = qs.map((q, idx) => {
+      const note = (ansMap[idx] || "").trim() || "Ingen anteckning ifylld ännu";
+      return `${idx + 1}. ${q}
+   Notering: ${note}`;
+    });
+    setSalarySummary(`Lönesamtalsunderlag (${roleLabel}):
+
+` + items.join("\n\n"));
+    setCopiedSalarySummary(false);
+  };
+
+  const handleCopySalarySummary = () => {
+    if (!salarySummary) return;
+    navigator.clipboard?.writeText(salarySummary);
+    setCopiedSalarySummary(true);
+    setTimeout(() => setCopiedSalarySummary(false), 2500);
+  };
+
+  const handleGenerateJointPulseSummary = () => {
+    const cleanQs = pulseQuestions.map((q) => q.trim()).filter(Boolean);
+    const lines = cleanQs.map((q, idx) => {
+      const ans = (jointPulseAnswers[idx] || "").trim() || "Ingen gemensam notering angiven";
+      return `- ${q}: ${ans}`;
+    });
+    if (jointPulseNotes.trim()) {
+      lines.push(`- Gemensamt nästa steg / överenskommelse: ${jointPulseNotes.trim()}`);
+    }
+    setJointPulseSummary(
+      `Gemensam pulssession (${pulseTitle.trim() || "Pulsmätning"}):
+` + lines.join("\n")
+    );
   };
 
   const handleRevokeMember = async (member: OrgMember) => {
@@ -961,7 +1137,224 @@ export default function B2BPortalPage() {
               )}
             </section>
 
-            {/* Skapa inbjudningskod & aktiva koder */}
+            {/* Redigerbar pulsmätarmodul: utskick till Påminnelser eller gemensam session */}
+        <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#4E5C4B]/10 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.15em] text-[#4E5C4B] font-semibold">
+                PULSMÄTNING &amp; PÅMINNELSER
+              </p>
+              <h2 className="text-lg font-semibold text-[#1C211B] mt-1">
+                Redigerbar pulsmätning för team &amp; medarbetare
+              </h2>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                Anpassa frågorna, skicka ut till mottagarnas Påminnelser i högra menyn eller kör en gemensam pulssession direkt.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setJointPulseOpen((prev) => !prev)}
+              className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+            >
+              {jointPulseOpen ? "Dölj gemensam session" : "Starta gemensam session"}
+            </button>
+          </div>
+
+          <form onSubmit={handleDispatchPulseToReminders} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-7 space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-[#4E5C4B] mb-1">
+                  Rubrik på pulsmätning
+                </label>
+                <input
+                  type="text"
+                  value={pulseTitle}
+                  onChange={(e) => setPulseTitle(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-[#4E5C4B]">
+                  Frågor i pulsmätningen (redigerbara)
+                </label>
+                {pulseQuestions.map((q, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-[#4E5C4B] w-5">{idx + 1}.</span>
+                    <input
+                      type="text"
+                      value={q}
+                      onChange={(e) => handleUpdatePulseQuestion(idx, e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                    />
+                    {pulseQuestions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePulseQuestion(idx)}
+                        className="px-2.5 py-2 rounded-xl border border-[#C57B57]/40 text-xs text-[#8F3519] hover:bg-[#C57B57]/10"
+                      >
+                        Ta bort
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={newPulseQuestion}
+                    onChange={(e) => setNewPulseQuestion(e.target.value)}
+                    placeholder="Lägg till ny fråga..."
+                    className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddPulseQuestion}
+                    className="px-3.5 py-2 rounded-xl bg-[#E8DCC4] border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/80"
+                  >
+                    + Lägg till fråga
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 bg-[#E8DCC4]/55 border border-[#4E5C4B]/15 rounded-xl p-4 space-y-3.5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4E5C4B]">
+                Utskick till Påminnelser (höger meny)
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#4E5C4B] mb-1">Frekvens</label>
+                  <select
+                    value={pulseFrequency}
+                    onChange={(e) => setPulseFrequency(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                  >
+                    <option value="once">Engångsutskick</option>
+                    <option value="weekly">Veckovis</option>
+                    <option value="daily">Dagligen</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#4E5C4B] mb-1">Påminnelsetid (valfri)</label>
+                  <input
+                    type="datetime-local"
+                    value={pulseRemindAt}
+                    onChange={(e) => setPulseRemindAt(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-[#1C211B]">
+                  <input
+                    type="checkbox"
+                    checked={pulseTargetAll}
+                    onChange={(e) => setPulseTargetAll(e.target.checked)}
+                    className="accent-[#4E5C4B]"
+                  />
+                  Skicka till alla aktiva medlemmar i organisationen
+                </label>
+
+                {!pulseTargetAll && (
+                  <div className="max-h-28 overflow-y-auto rounded-xl bg-white/80 border border-[#4E5C4B]/20 p-2 space-y-1">
+                    {members
+                      .filter((m) => m.status === "active")
+                      .map((m) => {
+                        const uid = m.user_id;
+                        const checked = selectedPulseMemberIds.includes(uid);
+                        return (
+                          <label key={m.id} className="flex items-center gap-2 text-xs text-[#1C211B]">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setSelectedPulseMemberIds((prev) =>
+                                  e.target.checked ? [...prev, uid] : prev.filter((x) => x !== uid)
+                                );
+                              }}
+                              className="accent-[#4E5C4B]"
+                            />
+                            <span className="truncate">{m.email || uid.slice(0, 8)}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={dispatchingPulse || !isOrgAdmin}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#C57B57] text-white text-xs font-semibold hover:bg-[#B26B48] transition disabled:opacity-50"
+              >
+                {!isOrgAdmin
+                  ? "Endast Organisationsadmin kan skicka ut"
+                  : dispatchingPulse
+                  ? "Skickar till Påminnelser..."
+                  : "Skicka ut till Påminnelser"}
+              </button>
+            </div>
+          </form>
+
+          {jointPulseOpen && (
+            <div className="mt-4 rounded-xl border border-[#4E5C4B]/25 bg-white/85 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#1C211B]">
+                  Gemensam pulsmätningssession: {pulseTitle || "Pulsmätning"}
+                </h3>
+                <span className="text-[11px] text-[#4E5C4B]">Tillsammans i session</span>
+              </div>
+              <div className="space-y-2.5">
+                {pulseQuestions.map((q, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <label className="block text-xs font-medium text-[#1C211B]">
+                      {idx + 1}. {q}
+                    </label>
+                    <input
+                      type="text"
+                      value={jointPulseAnswers[idx] || ""}
+                      onChange={(e) =>
+                        setJointPulseAnswers((prev) => ({ ...prev, [idx]: e.target.value }))
+                      }
+                      placeholder="Skriv gemensam reflektion eller svar..."
+                      className="w-full px-3 py-2 rounded-lg bg-[#FAF7F0] border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4E5C4B] mb-1">
+                  Gemensamma anteckningar / nästa steg
+                </label>
+                <textarea
+                  rows={2}
+                  value={jointPulseNotes}
+                  onChange={(e) => setJointPulseNotes(e.target.value)}
+                  placeholder="Vad kommer ni överens om efter denna gemensamma pulsmätning?"
+                  className="w-full px-3 py-2 rounded-lg bg-[#FAF7F0] border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateJointPulseSummary}
+                  className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+                >
+                  Sammanställ gemensam session
+                </button>
+              </div>
+              {jointPulseSummary && (
+                <pre className="whitespace-pre-wrap rounded-xl bg-[#F2ECE0] border border-[#4E5C4B]/20 p-3 text-xs text-[#1C211B] font-sans">
+                  {jointPulseSummary}
+                </pre>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Skapa inbjudningskod & aktiva koder */}
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-5 bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-4">
                 <div>
@@ -1294,6 +1687,153 @@ export default function B2BPortalPage() {
           </>
         )}
       
+        {/* Rollväxlad lönesamtalsmodul med redigerbara frågor */}
+        <section className="mt-8 rounded-2xl border border-[#4E5C4B]/20 bg-[#F7F2E8] p-6 space-y-5 text-[#1C211B]">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#4E5C4B]/10 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.15em] text-[#4E5C4B] font-semibold">
+                LÖNESAMTAL &amp; FÖRBEREDELSE
+              </p>
+              <h2 className="text-lg font-semibold text-[#1C211B] mt-1">
+                Lönesamtalsmodul för arbetsgivare &amp; medarbetare
+              </h2>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                Växla roll, redigera förinställda frågor, lägg till egna samtalsfrågor och förbered ett tydligt underlag inför samtalet.
+              </p>
+            </div>
+
+            <div className="inline-flex rounded-xl bg-[#E8DCC4] p-1 border border-[#4E5C4B]/20">
+              <button
+                type="button"
+                onClick={() => setSalaryRole("employer")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
+                  salaryRole === "employer"
+                    ? "bg-[#4E5C4B] text-white shadow-xs"
+                    : "text-[#1C211B] hover:bg-white/50"
+                }`}
+              >
+                Arbetsgivare / Chef
+              </button>
+              <button
+                type="button"
+                onClick={() => setSalaryRole("employee")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
+                  salaryRole === "employee"
+                    ? "bg-[#4E5C4B] text-white shadow-xs"
+                    : "text-[#1C211B] hover:bg-white/50"
+                }`}
+              >
+                Medarbetare
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#4E5C4B]">
+                Frågor &amp; reflektioner — {salaryRole === "employer" ? "Arbetsgivare / Chef" : "Medarbetare"}
+              </span>
+              <button
+                type="button"
+                onClick={handleResetSalaryQuestions}
+                className="text-xs font-medium text-[#4E5C4B] underline hover:text-[#1C211B]"
+              >
+                Återställ förinställda frågor
+              </button>
+            </div>
+
+            {salaryQuestions[salaryRole].map((q, idx) => (
+              <div
+                key={`${salaryRole}-${idx}`}
+                className="rounded-xl border border-[#4E5C4B]/15 bg-white/80 p-3.5 space-y-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#4E5C4B] w-5">{idx + 1}.</span>
+                  <input
+                    type="text"
+                    value={q}
+                    onChange={(e) => handleUpdateSalaryQuestion(idx, e.target.value)}
+                    aria-label={`Lönesamtalsfråga ${idx + 1}`}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B]"
+                  />
+                  {salaryQuestions[salaryRole].length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSalaryQuestion(idx)}
+                      className="px-2.5 py-1.5 rounded-lg border border-[#C57B57]/40 text-xs text-[#8F3519] hover:bg-[#C57B57]/10"
+                    >
+                      Ta bort
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={salaryAnswers[salaryRole]?.[idx] || ""}
+                  onChange={(e) =>
+                    setSalaryAnswers((prev) => ({
+                      ...prev,
+                      [salaryRole]: {
+                        ...(prev[salaryRole] || {}),
+                        [idx]: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder={
+                    salaryRole === "employer"
+                      ? "Anteckning inför lönesamtalet (chefsperspektiv)..."
+                      : "Anteckning inför lönesamtalet (medarbetarperspektiv)..."
+                  }
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#FAF7F0] border border-[#4E5C4B]/20 text-xs text-[#1C211B]"
+                />
+              </div>
+            ))}
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={newSalaryQuestion}
+                onChange={(e) => setNewSalaryQuestion(e.target.value)}
+                placeholder={`Lägg till egen fråga för ${salaryRole === "employer" ? "arbetsgivare/chef" : "medarbetare"}...`}
+                className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-[#4E5C4B]/25 text-xs text-[#1C211B]"
+              />
+              <button
+                type="button"
+                onClick={handleAddSalaryQuestion}
+                className="px-4 py-2 rounded-xl bg-[#E8DCC4] border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/80"
+              >
+                + Lägg till fråga
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateSalarySummary}
+                className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+              >
+                Skapa samtalsunderlag
+              </button>
+            </div>
+          </div>
+
+          {salarySummary && (
+            <div className="rounded-xl bg-[#F2ECE0] border border-[#4E5C4B]/20 p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#4E5C4B]">
+                  Sammanfattning inför lönesamtal
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopySalarySummary}
+                  className="px-3 py-1 rounded-lg bg-white border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#FAF7F0]"
+                >
+                  {copiedSalarySummary ? "Kopierad" : "Kopiera underlag"}
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap text-xs text-[#1C211B] font-sans leading-relaxed">
+                {salarySummary}
+              </pre>
+            </div>
+          )}
+        </section>
+
         {/* B2B LEDARSKAPS- & TEAMKOMPASS (FALK BIBLE KAP. 5 – STRIKT K-ANONYMITET) */}
         <section className="mt-8 rounded-2xl border border-[#DFD4BE] bg-[#FAF7F0] p-6 shadow-xs text-[#1C1C1C]">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">

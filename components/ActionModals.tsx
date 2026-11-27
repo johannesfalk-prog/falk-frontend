@@ -261,6 +261,14 @@ export default function ActionModals({
   const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [dailyMoodPopupEnabled, setDailyMoodPopupEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('falk_daily_mood_popup_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const {
@@ -1652,6 +1660,44 @@ export default function ActionModals({
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-[#4E5C4B]" />
               <h2 className="text-lg font-semibold">Inställningar &amp; Integritet</h2>
+            </div>
+
+            {/* Daglig dagsformspopup (valbar under Inställningar & Integritet) */}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-[#D8CCB8]/60 p-3">
+              <div>
+                <p className="text-sm font-medium">Daglig dagsformspopup</p>
+                <p className={`text-xs ${subText}`}>
+                  {dailyMoodPopupEnabled
+                    ? 'Aktiverad — visar en kort dagsformscheck (5 val) högst en gång per dag kopplad till kompasskalibreringen.'
+                    : 'Avstängd — aktivera om du vill få en kort dagsformscheck en gång per dag.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={dailyMoodPopupEnabled}
+                onClick={() => {
+                  const next = !dailyMoodPopupEnabled;
+                  setDailyMoodPopupEnabled(next);
+                  try {
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('falk_daily_mood_popup_enabled', String(next));
+                      window.dispatchEvent(
+                        new CustomEvent('falk:daily-mood-toggle', { detail: { enabled: next } })
+                      );
+                    }
+                  } catch {
+                    // ignore storage errors
+                  }
+                }}
+                className={`shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                  dailyMoodPopupEnabled
+                    ? 'bg-[#4E5C4B] text-white'
+                    : 'border border-[#D8CCB8] hover:bg-black/5'
+                }`}
+              >
+                {dailyMoodPopupEnabled ? 'På' : 'Av'}
+              </button>
             </div>
 
             {/* Vy / Tema */}

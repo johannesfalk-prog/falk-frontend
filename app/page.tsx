@@ -104,6 +104,12 @@ export default function FalkHomePage() {
   const [isRightOpen, setIsRightOpen] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(true);
   const [sessionMode, setSessionMode] = useState<string | null>(null);
+const [cardContext, setCardContext] = useState<{
+  kind: 'onboarding' | 'exercise' | 'compass_session';
+  title: string;
+  purpose?: string;
+  steps?: string[];
+} | null>(null);
   const [showSessionsDrawer, setShowSessionsDrawer] = useState(false);
 
   const COMPASS_SESSION_OPTIONS = [
@@ -713,6 +719,7 @@ export default function FalkHomePage() {
     setActiveConversationId(null);
     setMessages([]);
     setSessionMode(null);
+    setCardContext(null);
     setShowWelcomeCard(true);
     setActiveView('chat');
     setIsLeftOpen(false);
@@ -1053,6 +1060,7 @@ export default function FalkHomePage() {
         message: text,
         display_name: displayName.trim() || undefined,
         session_mode: sessionMode || undefined,
+        card_context: cardContext || undefined,
         final_compass: isFinalCompassTrigger || undefined,
         conversation_id: activeConversationId,
         session_id: activeConversationId,
@@ -1472,6 +1480,121 @@ export default function FalkHomePage() {
     (k) => focusSliders[k] > 0
   ).length;
 
+  const [dailyMoodEnabled, setDailyMoodEnabled] = useState<boolean>(false);
+  const [showDailyMoodPopup, setShowDailyMoodPopup] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const syncAndCheck = () => {
+      try {
+        const enabled = window.localStorage.getItem('falk_daily_mood_popup_enabled') === 'true';
+        setDailyMoodEnabled(enabled);
+        const lastShown = window.localStorage.getItem('falk_daily_mood_last_shown_date') || '';
+        if (enabled && lastShown !== todayKey) {
+          setShowDailyMoodPopup(true);
+        } else if (!enabled) {
+          setShowDailyMoodPopup(false);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    };
+    syncAndCheck();
+    const onToggleEvent = () => syncAndCheck();
+    window.addEventListener('falk:daily-mood-toggle', onToggleEvent);
+    return () => window.removeEventListener('falk:daily-mood-toggle', onToggleEvent);
+  }, []);
+
+  const DAILY_MOOD_OPTIONS: Array<{
+    id: string;
+    label: string;
+    hint: string;
+    focusPatch: Record<string, number>;
+    promptNote: string;
+  }> = [
+    {
+      id: 'grounded_clear',
+      label: '1. Stadig & klar',
+      hint: 'God riktning och lugn bas — kalibrerar mot inre riktning & mod.',
+      focusPatch: { motivation: 70, handlingskraft: 60, stresshantering: 20 },
+      promptNote: 'Min dagsform idag är stadig och klar. Hjälp mig kalibrera kompassen mot min riktning och nästa kloka steg.',
+    },
+    {
+      id: 'flowing_motivated',
+      label: '2. Framåtriktad & engagerad',
+      hint: 'Hög energi och vilja — kalibrerar mot handlingskraft & Mikromod.',
+      focusPatch: { handlingskraft: 80, motivation: 75, stresshantering: 25 },
+      promptNote: 'Min dagsform idag är framåtriktad och engagerad. Hjälp mig omsätta energi till ett tydligt litet steg.',
+    },
+    {
+      id: 'mixed_shifting',
+      label: '3. Skiftande / mitt emellan',
+      hint: 'Blandade signaler — kalibrerar kompassen för att sortera läget.',
+      focusPatch: { sjalvfortroende: 55, motivation: 50, stresshantering: 45 },
+      promptNote: 'Min dagsform idag är lite skiftande. Hjälp mig stanna upp och sortera vad som är viktigast i min kompass just nu.',
+    },
+    {
+      id: 'stretched_boundaries',
+      label: '4. Pressad / behov av gränser',
+      hint: 'Ytterkrav eller högt tempo — kalibrerar mot gränssättning & återhämtning.',
+      focusPatch: { granssattning: 75, stresshantering: 70 },
+      promptNote: 'Min dagsform idag känns pressad med behov av tydligare gränser. Hjälp mig kalibrera kompassen runt vad jag behöver säga ja eller nej till.',
+    },
+    {
+      id: 'heavy_drained',
+      label: '5. Tung & trött (behöver lugn)',
+      hint: 'Låg energi / belastning — sänker tempot och kalibrerar mot stresshantering.',
+      focusPatch: { stresshantering: 85, granssattning: 60 },
+      promptNote: 'Min dagsform idag är tung och trött. Möts mig lugnt och hjälp mig kalibrera kompassen för återhämtning.',
+    },
+  ];
+
+  const handleSelectDailyMood = (
+    opt: {
+      id: string;
+      label: string;
+      hint: string;
+      focusPatch: Record<string, number>;
+      promptNote: string;
+    },
+    options?: { openCalibration?: boolean; startChat?: boolean }
+  ) => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('falk_daily_mood_last_shown_date', todayKey);
+        window.localStorage.setItem('falk_daily_mood_today', opt.id);
+      }
+    } catch {
+      // ignore storage errors
+    }
+    setFocusSliders((prev: any) => ({
+      ...(prev && typeof prev === 'object' ? prev : {}),
+      ...opt.focusPatch,
+    }));
+    setShowDailyMoodPopup(false);
+    if (options?.openCalibration) {
+      setIsCalibrationOpen(true);
+    } else if (options?.startChat) {
+      setActiveView('chat');
+      handleSendMessage(opt.promptNote);
+    }
+  };
+
+  const handleDismissDailyMoodPopup = () => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('falk_daily_mood_last_shown_date', todayKey);
+      }
+    } catch {
+      // ignore storage errors
+    }
+    setShowDailyMoodPopup(false);
+  };
+
+
   return (
     <div
       className={`min-h-[100dvh] flex flex-col transition-colors ${
@@ -1737,8 +1860,13 @@ export default function FalkHomePage() {
                               return;
                             }
                             setSessionMode(opt.id);
-                            setShowWelcomeCard(false);
-                            handleSendMessage(`Jag vill starta en guidad Kompass-session: ${opt.title} (${opt.duration}).`);
+                setCardContext({
+                  kind: 'compass_session',
+                  title: opt.title,
+                  purpose: opt.desc,
+                });
+                setShowWelcomeCard(false);
+                handleSendMessage(`Jag vill starta en guidad Kompass-session: ${opt.title} (${opt.duration}).`);
                           }}
                           className={`text-left p-3.5 rounded-2xl border transition ${
                             active
@@ -1770,7 +1898,14 @@ export default function FalkHomePage() {
                   <button
                     key={card.id}
                     type="button"
-                    onClick={() => handleSendMessage(card.prompt)}
+                    onClick={() => {
+                setCardContext({
+                  kind: 'onboarding',
+                  title: card.title,
+                  purpose: card.prompt,
+                });
+                handleSendMessage(card.prompt);
+              }}
                     className={`w-full text-left rounded-2xl px-5 py-4 border transition shadow-xs hover:translate-y-[-1px] ${
                       darkMode
                         ? 'bg-[#23221F] border-[#383630] hover:border-[#C57B57]/60'
@@ -2233,17 +2368,23 @@ export default function FalkHomePage() {
             initialSegment={b2bContext?.active ? 'b2b' : hasB2bAccess ? 'all' : 'b2c'}
             allowSegmentSwitch={hasB2bAccess || Boolean(b2bContext?.active)}
             onStartExercise={(card) => {
-              if (card.segment === 'b2b') {
-                setB2bContext((prev) => ({
-                  active: true,
-                  level: prev?.level || 'individual',
-                }));
-              }
-              setActiveConversationId(null);
-              setMessages([]);
-              setActiveView('chat');
-              handleSendMessage(card.prompt_trigger || card.title);
-            }}
+                if (card.segment === 'b2b') {
+                  setB2bContext((prev) => ({
+                    active: true,
+                    level: prev?.level || 'individual',
+                  }));
+                }
+                setCardContext({
+                  kind: 'exercise',
+                  title: card.title,
+                  purpose: card.goal || card.description,
+                  steps: Array.isArray(card.steps) ? card.steps : undefined,
+                });
+                setActiveConversationId(null);
+                setMessages([]);
+                setActiveView('chat');
+                handleSendMessage(card.prompt_trigger || card.title);
+              }}
             onBackToChat={() => setActiveView('chat')}
           />
         )}
@@ -2650,6 +2791,63 @@ export default function FalkHomePage() {
         }}
         onExploreWithFalk={handleExploreCalibration}
       />
-    </div>
+          {/* Valbar daglig dagsformspopup (5 alternativ kopplade till kompasskalibrering) */}
+      {dailyMoodEnabled && showDailyMoodPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
+          <div className="w-full max-w-md rounded-2xl border border-[#4E5C4B]/25 bg-[#F7F2E8] p-6 text-[#1C211B] shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4E5C4B]">
+                  DAGLIG DAGSFORM &middot; KOMPASSKALIBRERING
+                </p>
+                <h2 className="text-lg font-semibold mt-0.5">Hur känns din dagsform idag?</h2>
+                <p className="text-xs text-[#4E5C4B] mt-1">
+                  Välj ett av fem lägen för att kalibrera FALK:s fokusläge inför dagen.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDismissDailyMoodPopup}
+                aria-label="Stäng dagsformspopup"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-[#4E5C4B] hover:bg-black/10"
+              >
+                Stäng
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {DAILY_MOOD_OPTIONS.map((opt) => (
+                <div
+                  key={opt.id}
+                  className="rounded-xl border border-[#4E5C4B]/15 bg-white/85 p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-[#1C211B]">{opt.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectDailyMood(opt, { openCalibration: true })}
+                        className="rounded-lg border border-[#4E5C4B]/30 px-2.5 py-1 text-[11px] font-medium text-[#1C211B] hover:bg-[#E8DCC4]/70"
+                      >
+                        Kalibrera kompass
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectDailyMood(opt, { startChat: true })}
+                        className="rounded-lg bg-[#4E5C4B] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3F4B3C]"
+                      >
+                        Kalibrera &amp; samtala
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-[#4E5C4B] leading-snug">{opt.hint}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+</div>
   );
 }
