@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, getAuthHeaders } from "@/lib/supabase";
+import B2BSuiteTools from "@/components/B2BSuiteTools";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -3161,6 +3162,10 @@ export default function B2BPortalPage() {
         </section>
           </div>
         )}
+          <B2BSuiteTools
+            activeTab={b2bNavTab}
+            orgName={orgInfo?.name || "Organisationen"}
+          />
       </main>
     </div>
   );
