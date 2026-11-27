@@ -254,6 +254,33 @@ export default function B2BPortalPage() {
 
   // 4. Integritet, Förtroende & Rapportering (minst 5 personer + export)
   const [reportFormatMsg, setReportFormatMsg] = useState<string | null>(null);
+  const [b2bNavTab, setB2bNavTab] = useState<
+    "oversikt" | "matningar" | "samtal" | "organisation" | "alla"
+  >("oversikt");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const applyHashTab = () => {
+      const h = window.location.hash.replace("#", "").toLowerCase();
+      if (h === "matningar") setB2bNavTab("matningar");
+      else if (h === "samtal") setB2bNavTab("samtal");
+      else if (h === "organisation") setB2bNavTab("organisation");
+      else if (h === "alla") setB2bNavTab("alla");
+      else if (h === "oversikt") setB2bNavTab("oversikt");
+    };
+    applyHashTab();
+    window.addEventListener("hashchange", applyHashTab);
+    return () => window.removeEventListener("hashchange", applyHashTab);
+  }, []);
+
+  const handleSelectB2bTab = (
+    tab: "oversikt" | "matningar" | "samtal" | "organisation" | "alla"
+  ) => {
+    setB2bNavTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${tab}`);
+    }
+  };
   const [salaryRole, setSalaryRole] = useState<"employer" | "employee">("employer");
   const [salaryQuestions, setSalaryQuestions] = useState<{
     employer: string[];
@@ -1170,6 +1197,80 @@ export default function B2BPortalPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        {/* B2B-meny med kategorier, delbara länkar & snabblänkar */}
+        <nav
+          aria-label="B2B-sektioner"
+          className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-4 space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { id: "oversikt", label: "Översikt & Uppföljning", href: "#oversikt" },
+                  { id: "matningar", label: "Mätningar & Enkäter", href: "#matningar" },
+                  { id: "samtal", label: "Samtal & Ledarskap", href: "#samtal" },
+                  { id: "organisation", label: "Organisation & Integritet", href: "#organisation" },
+                  { id: "alla", label: "Alla delar", href: "#alla" },
+                ] as const
+              ).map((item) => {
+                const active = b2bNavTab === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSelectB2bTab(item.id);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition border ${
+                      active
+                        ? "bg-[#4E5C4B] text-white border-[#4E5C4B]"
+                        : "bg-white/80 text-[#1C211B] border-[#4E5C4B]/20 hover:bg-[#E8DCC4]/60"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <a
+                href="/?reminders=1"
+                className="px-3 py-1.5 rounded-xl border border-[#4E5C4B]/25 bg-white/80 text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+              >
+                Påminnelser →
+              </a>
+              <a
+                href="/"
+                className="px-3 py-1.5 rounded-xl border border-[#4E5C4B]/25 bg-white/80 text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+              >
+                Startsida / FALK →
+              </a>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#4E5C4B] pt-1 border-t border-[#4E5C4B]/10">
+            <span>
+              Aktiv vy: <strong className="text-[#1C211B]">#{b2bNavTab}</strong> (delbar länk)
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText(window.location.href).catch(() => {});
+                }
+              }}
+              className="underline hover:text-[#1C211B]"
+            >
+              Kopiera länk till denna vy
+            </button>
+          </div>
+        </nav>
+
+        {(b2bNavTab === "oversikt" || b2bNavTab === "alla") && (
+          <div id="oversikt" className="space-y-8">
+
         {/* Statusmeddelanden */}
         {errorMsg && (
           <div className="p-4 rounded-xl bg-[#C57B57]/20 border border-[#C57B57] text-sm text-[#6E2712]">
@@ -1466,7 +1567,13 @@ export default function B2BPortalPage() {
                 </div>
               )}
             </section>
+          </>
+        )}
+          </div>
+        )}
 
+        {(b2bNavTab === "matningar" || b2bNavTab === "alla") && (
+          <div id="matningar" className="space-y-8">
             {/* Redigerbar pulsmätarmodul: utskick till Påminnelser eller gemensam session */}
         <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#4E5C4B]/10 pb-4">
@@ -1856,6 +1963,11 @@ export default function B2BPortalPage() {
           </form>
         </section>
 
+          </div>
+        )}
+
+        {(b2bNavTab === "samtal" || b2bNavTab === "alla") && (
+          <div id="samtal" className="space-y-8">
         {/* Medarbetarsamtal (redigerbara frågor + utskick till Påminnelser + gemensamt genomförande) */}
         <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
@@ -2380,6 +2492,11 @@ export default function B2BPortalPage() {
           </div>
         </section>
 
+          </div>
+        )}
+
+        {(b2bNavTab === "organisation" || b2bNavTab === "alla") && (
+          <div id="organisation" className="space-y-8">
         {/* 3. Organisation, Rollstruktur & Administration + 4. Integritet & Rapportering */}
         <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
@@ -2836,8 +2953,6 @@ export default function B2BPortalPage() {
                 </div>
               )}
             </section>
-          </>
-        )}
       
         {/* Rollväxlad lönesamtalsmodul med redigerbara frågor */}
         <section className="mt-8 rounded-2xl border border-[#4E5C4B]/20 bg-[#F7F2E8] p-6 space-y-5 text-[#1C211B]">
@@ -3044,6 +3159,8 @@ export default function B2BPortalPage() {
             </a>
           </div>
         </section>
+          </div>
+        )}
       </main>
     </div>
   );
