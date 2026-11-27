@@ -146,6 +146,41 @@ export default function B2BPortalPage() {
   const [jointPulseAnswers, setJointPulseAnswers] = useState<Record<number, string>>({});
   const [jointPulseNotes, setJointPulseNotes] = useState("");
   const [jointPulseSummary, setJointPulseSummary] = useState("");
+
+  // Trygghetsenkät (redigerbara frågor + utskick till Påminnelser)
+  const defaultSafetyQuestions = [
+    "Hur tryggt känns det att ta upp misstag, tveksamheter eller avvikande åsikter i teamet?",
+    "Hur upplever du öppenhet, respekt och stöd när arbetsbelastningen eller tempot ökar?",
+    "Vad skulle göra det ännu enklare att be om hjälp eller lyfta risker tidigt?",
+  ];
+  const [safetyTitle, setSafetyTitle] = useState("Team-trygghetsenkät");
+  const [safetyQuestions, setSafetyQuestions] = useState<string[]>(defaultSafetyQuestions);
+  const [safetyFrequency, setSafetyFrequency] = useState<"once" | "weekly" | "monthly">("once");
+  const [safetyRemindAt, setSafetyRemindAt] = useState("");
+  const [safetyTargetAll, setSafetyTargetAll] = useState(true);
+  const [selectedSafetyMemberIds, setSelectedSafetyMemberIds] = useState<string[]>([]);
+  const [safetyDispatching, setSafetyDispatching] = useState(false);
+  const [safetyStatusMsg, setSafetyStatusMsg] = useState<string | null>(null);
+
+  // Medarbetarsamtal (redigerbara frågor + utskick till Påminnelser + gemensamt genomförande)
+  const defaultOneOnOneQuestions = [
+    "Vad har gett dig mest energi och tydligast riktning i rollen på sistone?",
+    "Vilka resultat eller situationer vill du lyfta fram från perioden som gått?",
+    "Vad behöver du mest av i stöd, mandat eller prioriteringar framåt?",
+  ];
+  const [oneOnOneTitle, setOneOnOneTitle] = useState("Medarbetarsamtal");
+  const [oneOnOneQuestions, setOneOnOneQuestions] = useState<string[]>(defaultOneOnOneQuestions);
+  const [oneOnOneFrequency, setOneOnOneFrequency] = useState<"once" | "weekly" | "monthly">("once");
+  const [oneOnOneRemindAt, setOneOnOneRemindAt] = useState("");
+  const [oneOnOneTargetAll, setOneOnOneTargetAll] = useState(true);
+  const [selectedOneOnOneMemberIds, setSelectedOneOnOneMemberIds] = useState<string[]>([]);
+  const [oneOnOneDispatching, setOneOnOneDispatching] = useState(false);
+  const [oneOnOneStatusMsg, setOneOnOneStatusMsg] = useState<string | null>(null);
+  const [jointOneOnOneOpen, setJointOneOnOneOpen] = useState(false);
+  const [jointOneOnOneAnswers, setJointOneOnOneAnswers] = useState<Record<number, string>>({});
+  const [jointOneOnOneNotes, setJointOneOnOneNotes] = useState("");
+  const [jointOneOnOneSummary, setJointOneOnOneSummary] = useState("");
+  const [copiedOneOnOneSummary, setCopiedOneOnOneSummary] = useState(false);
   const [salaryRole, setSalaryRole] = useState<"employer" | "employee">("employer");
   const [salaryQuestions, setSalaryQuestions] = useState<{
     employer: string[];
@@ -560,6 +595,107 @@ export default function B2BPortalPage() {
       `Gemensam pulssession (${pulseTitle.trim() || "Pulsmätning"}):
 ` + lines.join("\n")
     );
+  };
+
+  const handleDispatchSafetySurvey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSafetyStatusMsg(null);
+    const cleanQs = safetyQuestions.map((q) => q.trim()).filter(Boolean);
+    if (cleanQs.length === 0) {
+      setSafetyStatusMsg("Lägg till minst en fråga till trygghetsenkäten.");
+      return;
+    }
+    setSafetyDispatching(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/b2b/org/safety-survey-dispatch`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          org_id: orgInfo?.id,
+          title: safetyTitle.trim() || "Trygghetsenkät",
+          questions: cleanQs,
+          frequency: safetyFrequency,
+          remind_at: safetyRemindAt ? new Date(safetyRemindAt).toISOString() : null,
+          member_ids: safetyTargetAll ? null : selectedSafetyMemberIds,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Kunde inte skicka ut trygghetsenkäten till Påminnelser.");
+      }
+      setSafetyStatusMsg(
+        `Trygghetsenkäten skickades till Påminnelser för ${data.dispatched_count ?? "valda"} medarbetare.`
+      );
+    } catch (err: any) {
+      setSafetyStatusMsg(err?.message || "Kunde inte skicka ut trygghetsenkäten.");
+    } finally {
+      setSafetyDispatching(false);
+    }
+  };
+
+  const handleDispatchOneOnOne = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOneOnOneStatusMsg(null);
+    const cleanQs = oneOnOneQuestions.map((q) => q.trim()).filter(Boolean);
+    if (cleanQs.length === 0) {
+      setOneOnOneStatusMsg("Lägg till minst en fråga till medarbetarsamtalet.");
+      return;
+    }
+    setOneOnOneDispatching(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/b2b/org/one-on-one-dispatch`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          org_id: orgInfo?.id,
+          title: oneOnOneTitle.trim() || "Medarbetarsamtal",
+          questions: cleanQs,
+          frequency: oneOnOneFrequency,
+          remind_at: oneOnOneRemindAt ? new Date(oneOnOneRemindAt).toISOString() : null,
+          member_ids: oneOnOneTargetAll ? null : selectedOneOnOneMemberIds,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Kunde inte skicka ut medarbetarsamtalet till Påminnelser.");
+      }
+      setOneOnOneStatusMsg(
+        `Underlag för medarbetarsamtal skickades till Påminnelser för ${data.dispatched_count ?? "valda"} medarbetare.`
+      );
+    } catch (err: any) {
+      setOneOnOneStatusMsg(err?.message || "Kunde inte skicka ut medarbetarsamtalet.");
+    } finally {
+      setOneOnOneDispatching(false);
+    }
+  };
+
+  const handleGenerateJointOneOnOneSummary = () => {
+    const cleanQs = oneOnOneQuestions.map((q) => q.trim()).filter(Boolean);
+    const lines = cleanQs.map((q, idx) => {
+      const ans = (jointOneOnOneAnswers[idx] || "").trim() || "Ingen notering angiven";
+      return `- ${q}: ${ans}`;
+    });
+    if (jointOneOnOneNotes.trim()) {
+      lines.push(`- Gemensam överenskommelse / nästa steg: ${jointOneOnOneNotes.trim()}`);
+    }
+    setJointOneOnOneSummary(
+      `Sammanfattning medarbetarsamtal (${oneOnOneTitle.trim() || "Medarbetarsamtal"}):\n` +
+        lines.join("\n")
+    );
+    setCopiedOneOnOneSummary(false);
+  };
+
+  const handleCopyOneOnOneSummary = async () => {
+    if (!jointOneOnOneSummary) return;
+    try {
+      await navigator.clipboard.writeText(jointOneOnOneSummary);
+      setCopiedOneOnOneSummary(true);
+      setTimeout(() => setCopiedOneOnOneSummary(false), 2500);
+    } catch {
+      setOneOnOneStatusMsg("Kunde inte kopiera sammanfattningen automatiskt.");
+    }
   };
 
   const handleRevokeMember = async (member: OrgMember) => {
@@ -1348,6 +1484,441 @@ export default function B2BPortalPage() {
               {jointPulseSummary && (
                 <pre className="whitespace-pre-wrap rounded-xl bg-[#F2ECE0] border border-[#4E5C4B]/20 p-3 text-xs text-[#1C211B] font-sans">
                   {jointPulseSummary}
+                </pre>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Trygghetsenkät (redigerbara frågor + utskick till Påminnelser) */}
+        <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-[#1C211B]">
+                Trygghetsenkät
+              </h2>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                Redigera, lägg till eller ta bort frågor och skicka ut trygghetsenkäten direkt till medarbetarnas Påminnelser.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSafetyQuestions([...defaultSafetyQuestions]);
+                setSafetyStatusMsg(null);
+              }}
+              className="self-start md:self-auto px-3 py-1.5 rounded-xl border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+            >
+              Återställ standardfrågor
+            </button>
+          </div>
+
+          <form onSubmit={handleDispatchSafetySurvey} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Rubrik på trygghetsenkät
+                </label>
+                <input
+                  type="text"
+                  value={safetyTitle}
+                  onChange={(e) => setSafetyTitle(e.target.value)}
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Frekvens
+                </label>
+                <select
+                  value={safetyFrequency}
+                  onChange={(e) =>
+                    setSafetyFrequency(e.target.value as "once" | "weekly" | "monthly")
+                  }
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                >
+                  <option value="once">Engångsutskick</option>
+                  <option value="weekly">Varje vecka</option>
+                  <option value="monthly">Varje månad</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Påminnelsetid (valfritt)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={safetyRemindAt}
+                  onChange={(e) => setSafetyRemindAt(e.target.value)}
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#1C211B]">
+                  Frågor i trygghetsenkäten ({safetyQuestions.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSafetyQuestions((prev) => [...prev, ""])}
+                  className="px-3 py-1 rounded-lg border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+                >
+                  + Lägg till fråga
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {safetyQuestions.map((q, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-[#4E5C4B] w-5">
+                      {idx + 1}.
+                    </span>
+                    <input
+                      type="text"
+                      value={q}
+                      onChange={(e) => {
+                        const next = [...safetyQuestions];
+                        next[idx] = e.target.value;
+                        setSafetyQuestions(next);
+                      }}
+                      placeholder="Skriv fråga till trygghetsenkäten..."
+                      className="flex-1 rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                    />
+                    {safetyQuestions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSafetyQuestions((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="px-2.5 py-2 rounded-xl border border-red-300 text-xs text-red-700 hover:bg-red-50 transition"
+                      >
+                        Ta bort
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <label className="inline-flex items-center gap-2 text-xs font-medium text-[#1C211B]">
+                <input
+                  type="checkbox"
+                  checked={safetyTargetAll}
+                  onChange={(e) => setSafetyTargetAll(e.target.checked)}
+                  className="rounded border-[#4E5C4B]/40"
+                />
+                Skicka till alla aktiva medlemmar i organisationen
+              </label>
+
+              {!safetyTargetAll && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {members
+                    .filter((m) => m.status === "active")
+                    .map((m) => {
+                      const active = selectedSafetyMemberIds.includes(m.user_id);
+                      return (
+                        <button
+                          key={m.user_id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedSafetyMemberIds((prev) =>
+                              active
+                                ? prev.filter((id) => id !== m.user_id)
+                                : [...prev, m.user_id]
+                            )
+                          }
+                          className={`px-3 py-1 rounded-full text-xs border transition ${
+                            active
+                              ? "bg-[#4E5C4B] text-white border-[#4E5C4B]"
+                              : "bg-white text-[#1C211B] border-[#4E5C4B]/25"
+                          }`}
+                        >
+                          {m.email || m.user_id}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {safetyStatusMsg && (
+              <p className="text-xs font-medium text-[#2E5A36] bg-[#E3EFE5] border border-[#2E5A36]/20 rounded-xl px-3 py-2">
+                {safetyStatusMsg}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={safetyDispatching}
+                className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] disabled:opacity-50 transition"
+              >
+                {safetyDispatching ? "Skickar ut..." : "Skicka ut trygghetsenkät till Påminnelser"}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* Medarbetarsamtal (redigerbara frågor + utskick till Påminnelser + gemensamt genomförande) */}
+        <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-[#1C211B]">
+                Medarbetarsamtal
+              </h2>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                Anpassa frågorna, skicka ut underlag till medarbetarnas Påminnelser eller genomför medarbetarsamtalet gemensamt.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOneOnOneQuestions([...defaultOneOnOneQuestions]);
+                  setOneOnOneStatusMsg(null);
+                }}
+                className="px-3 py-1.5 rounded-xl border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+              >
+                Återställ standardfrågor
+              </button>
+              <button
+                type="button"
+                onClick={() => setJointOneOnOneOpen((prev) => !prev)}
+                className="px-3 py-1.5 rounded-xl border border-[#4E5C4B] text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/70 transition"
+              >
+                {jointOneOnOneOpen ? "Dölj gemensamt samtal" : "Genomför gemensamt"}
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleDispatchOneOnOne} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Rubrik på medarbetarsamtal
+                </label>
+                <input
+                  type="text"
+                  value={oneOnOneTitle}
+                  onChange={(e) => setOneOnOneTitle(e.target.value)}
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Frekvens
+                </label>
+                <select
+                  value={oneOnOneFrequency}
+                  onChange={(e) =>
+                    setOneOnOneFrequency(e.target.value as "once" | "weekly" | "monthly")
+                  }
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                >
+                  <option value="once">Engångsutskick</option>
+                  <option value="weekly">Varje vecka</option>
+                  <option value="monthly">Varje månad</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Påminnelsetid (valfritt)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={oneOnOneRemindAt}
+                  onChange={(e) => setOneOnOneRemindAt(e.target.value)}
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#1C211B]">
+                  Samtalsfrågor ({oneOnOneQuestions.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOneOnOneQuestions((prev) => [...prev, ""])}
+                  className="px-3 py-1 rounded-lg border border-[#4E5C4B]/25 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+                >
+                  + Lägg till fråga
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {oneOnOneQuestions.map((q, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-[#4E5C4B] w-5">
+                      {idx + 1}.
+                    </span>
+                    <input
+                      type="text"
+                      value={q}
+                      onChange={(e) => {
+                        const next = [...oneOnOneQuestions];
+                        next[idx] = e.target.value;
+                        setOneOnOneQuestions(next);
+                      }}
+                      placeholder="Skriv fråga till medarbetarsamtalet..."
+                      className="flex-1 rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                    />
+                    {oneOnOneQuestions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOneOnOneQuestions((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="px-2.5 py-2 rounded-xl border border-red-300 text-xs text-red-700 hover:bg-red-50 transition"
+                      >
+                        Ta bort
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <label className="inline-flex items-center gap-2 text-xs font-medium text-[#1C211B]">
+                <input
+                  type="checkbox"
+                  checked={oneOnOneTargetAll}
+                  onChange={(e) => setOneOnOneTargetAll(e.target.checked)}
+                  className="rounded border-[#4E5C4B]/40"
+                />
+                Skicka till alla aktiva medlemmar i organisationen
+              </label>
+
+              {!oneOnOneTargetAll && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {members
+                    .filter((m) => m.status === "active")
+                    .map((m) => {
+                      const active = selectedOneOnOneMemberIds.includes(m.user_id);
+                      return (
+                        <button
+                          key={m.user_id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedOneOnOneMemberIds((prev) =>
+                              active
+                                ? prev.filter((id) => id !== m.user_id)
+                                : [...prev, m.user_id]
+                            )
+                          }
+                          className={`px-3 py-1 rounded-full text-xs border transition ${
+                            active
+                              ? "bg-[#4E5C4B] text-white border-[#4E5C4B]"
+                              : "bg-white text-[#1C211B] border-[#4E5C4B]/25"
+                          }`}
+                        >
+                          {m.email || m.user_id}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {oneOnOneStatusMsg && (
+              <p className="text-xs font-medium text-[#2E5A36] bg-[#E3EFE5] border border-[#2E5A36]/20 rounded-xl px-3 py-2">
+                {oneOnOneStatusMsg}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={oneOnOneDispatching}
+                className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] disabled:opacity-50 transition"
+              >
+                {oneOnOneDispatching
+                  ? "Skickar ut..."
+                  : "Skicka ut medarbetarsamtal till Påminnelser"}
+              </button>
+            </div>
+          </form>
+
+          {jointOneOnOneOpen && (
+            <div className="rounded-2xl border border-[#4E5C4B]/25 bg-white/85 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#4E5C4B]">
+                  Gemensamt genomförande — {oneOnOneTitle || "Medarbetarsamtal"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setJointOneOnOneOpen(false)}
+                  className="text-xs text-[#4E5C4B] hover:underline"
+                >
+                  Stäng
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {oneOnOneQuestions
+                  .map((q) => q.trim())
+                  .filter(Boolean)
+                  .map((q, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <label className="block text-xs font-medium text-[#1C211B]">
+                        {idx + 1}. {q}
+                      </label>
+                      <input
+                        type="text"
+                        value={jointOneOnOneAnswers[idx] || ""}
+                        onChange={(e) =>
+                          setJointOneOnOneAnswers((prev) => ({
+                            ...prev,
+                            [idx]: e.target.value,
+                          }))
+                        }
+                        placeholder="Anteckna samtalspunkt eller svar gemensamt..."
+                        className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-1.5 text-xs text-[#1C211B]"
+                      />
+                    </div>
+                  ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                  Gemensam överenskommelse / nästa steg
+                </label>
+                <textarea
+                  rows={2}
+                  value={jointOneOnOneNotes}
+                  onChange={(e) => setJointOneOnOneNotes(e.target.value)}
+                  placeholder="Skriv överenskomna mål, stöd eller uppföljning..."
+                  className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateJointOneOnOneSummary}
+                  className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+                >
+                  Sammanställ medarbetarsamtal
+                </button>
+                {jointOneOnOneSummary && (
+                  <button
+                    type="button"
+                    onClick={handleCopyOneOnOneSummary}
+                    className="px-3.5 py-2 rounded-xl border border-[#4E5C4B]/30 text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+                  >
+                    {copiedOneOnOneSummary ? "Kopierat!" : "Kopiera sammanfattning"}
+                  </button>
+                )}
+              </div>
+
+              {jointOneOnOneSummary && (
+                <pre className="whitespace-pre-wrap rounded-xl bg-[#F2ECE0] border border-[#4E5C4B]/20 p-3 text-xs text-[#1C211B] font-sans">
+                  {jointOneOnOneSummary}
                 </pre>
               )}
             </div>
