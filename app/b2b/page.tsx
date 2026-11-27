@@ -181,6 +181,79 @@ export default function B2BPortalPage() {
   const [jointOneOnOneNotes, setJointOneOnOneNotes] = useState("");
   const [jointOneOnOneSummary, setJointOneOnOneSummary] = useState("");
   const [copiedOneOnOneSummary, setCopiedOneOnOneSummary] = useState(false);
+
+  // 1. Uppföljning & Åtgärdsflöden (mallbibliotek + handlingspunkter)
+  const [b2bActionItems, setB2bActionItems] = useState<
+    Array<{ id: string; source: string; text: string; ownerLabel: string; done: boolean }>
+  >([
+    {
+      id: "act-1",
+      source: "Medarbetarsamtal",
+      text: "Följ upp prioriteringar och mandat vid nästa 1-på-1-avstämning",
+      ownerLabel: "Chef & medarbetare",
+      done: false,
+    },
+    {
+      id: "act-2",
+      source: "Trygghetsenkät",
+      text: "Skapa tydlig rutin för att lyfta tidiga risker utan prestige",
+      ownerLabel: "Teamet",
+      done: false,
+    },
+  ]);
+  const [newActionText, setNewActionText] = useState("");
+  const [newActionSource, setNewActionSource] = useState("Medarbetarsamtal");
+  const [followupStatusMsg, setFollowupStatusMsg] = useState<string | null>(null);
+  const [followupDispatching, setFollowupDispatching] = useState(false);
+
+  // 2. Ledarskaps- & Chefstöd i Vardagen (situationsguider + 30-90 dagars onboarding)
+  const leaderGuides: Array<{
+    id: string;
+    title: string;
+    situation: string;
+    prompts: string[];
+  }> = [
+    {
+      id: "feedback",
+      title: "Konstruktiv feedback & riktning",
+      situation: "När du vill ge tydlig, stärkande eller korrigerande feedback",
+      prompts: [
+        "Beskriv konkret vad som hände i situationen utan värderande etiketter.",
+        "Förklara vilken effekt det fick på teamets arbete, kvalitet eller trygghet.",
+        "Fråga hur medarbetaren ser på läget och vad som behövs framåt.",
+      ],
+    },
+    {
+      id: "load",
+      title: "Belastning, tempo & återhämtning",
+      situation: "När arbetstempot är högt eller energin sviktar",
+      prompts: [
+        "Vad tar mest energi just nu och vad kan pausas, skjutas upp eller delegeras?",
+        "Hur ser återhämtningen ut mellan perioder med högt tryck?",
+        "Vilken konkret avlastning eller prioritering enas vi om denna vecka?",
+      ],
+    },
+    {
+      id: "expectations",
+      title: "Förväntningar & rolltydlighet",
+      situation: "Vid ny roll, otydliga gränser eller nya mål",
+      prompts: [
+        "Vad betyder framgång i rollen om 30, 60 och 90 dagar?",
+        "Vilka beslut har medarbetaren eget mandat att fatta?",
+        "Var behöver vi stämma av löpande så att inget hänger i luften?",
+      ],
+    },
+  ];
+  const [selectedGuideId, setSelectedGuideId] = useState<string>("feedback");
+  const [guideNotes, setGuideNotes] = useState<Record<string, string>>({});
+  const [onboardingStage, setOnboardingStage] = useState<"30d" | "60d" | "90d">("30d");
+
+  // 3. Organisation, Rollstruktur & Administration (team/avdelning + översikt)
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("Alla team");
+  const [memberTeams, setMemberTeams] = useState<Record<string, string>>({});
+
+  // 4. Integritet, Förtroende & Rapportering (minst 5 personer + export)
+  const [reportFormatMsg, setReportFormatMsg] = useState<string | null>(null);
   const [salaryRole, setSalaryRole] = useState<"employer" | "employee">("employer");
   const [salaryQuestions, setSalaryQuestions] = useState<{
     employer: string[];
@@ -695,6 +768,127 @@ export default function B2BPortalPage() {
       setTimeout(() => setCopiedOneOnOneSummary(false), 2500);
     } catch {
       setOneOnOneStatusMsg("Kunde inte kopiera sammanfattningen automatiskt.");
+    }
+  };
+
+  const handleApplyTemplateToPulse = (questions: string[], title: string) => {
+    setPulseTitle(title);
+    setPulseQuestions(questions);
+  };
+
+  const handleApplyTemplateToSafety = (questions: string[], title: string) => {
+    setSafetyTitle(title);
+    setSafetyQuestions(questions);
+  };
+
+  const handleApplyTemplateToOneOnOne = (questions: string[], title: string) => {
+    setOneOnOneTitle(title);
+    setOneOnOneQuestions(questions);
+  };
+
+  const handleAddActionItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = newActionText.trim();
+    if (!clean) return;
+    setB2bActionItems((prev) => [
+      ...prev,
+      {
+        id: `act-${Date.now()}`,
+        source: newActionSource,
+        text: clean,
+        ownerLabel: "Chef & medarbetare",
+        done: false,
+      },
+    ]);
+    setNewActionText("");
+  };
+
+  const handleDispatchFollowupReminders = async () => {
+    setFollowupStatusMsg(null);
+    const openItems = b2bActionItems.filter((a) => !a.done).map((a) => `${a.text} (${a.source})`);
+    const itemsToSend = openItems.length > 0 ? openItems : b2bActionItems.map((a) => a.text);
+    if (itemsToSend.length === 0) {
+      setFollowupStatusMsg("Lägg till minst en handlingspunkt innan du skickar uppföljning.");
+      return;
+    }
+    setFollowupDispatching(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/b2b/org/followup-dispatch`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          org_id: orgInfo?.id,
+          title: "Uppföljning av samtal & handlingspunkter",
+          questions: itemsToSend.slice(0, 8),
+          frequency: "once",
+          member_ids: null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Kunde inte skicka uppföljningspåminnelser.");
+      }
+      setFollowupStatusMsg(
+        `Uppföljningspåminnelser skickades till Påminnelser för ${data.dispatched_count ?? "aktiva"} medlemmar.`
+      );
+    } catch (err: any) {
+      setFollowupStatusMsg(err?.message || "Kunde inte skicka uppföljningspåminnelser.");
+    } finally {
+      setFollowupDispatching(false);
+    }
+  };
+
+  const activeMembersList = members.filter((m) => m.status === "active");
+  const activeMemberCount = activeMembersList.length;
+  const kAnonymityMet = activeMemberCount >= 5;
+
+  const buildExecutiveReportText = () => {
+    const openActs = b2bActionItems.filter((a) => !a.done);
+    return [
+      `FALK B2B – Samlat arbetsgivarunderlag (${orgInfo?.name || "Organisation"})`,
+      `Aktiva medlemmar: ${activeMemberCount} | Anonymitetströskel (minst 5 personer): ${kAnonymityMet ? "Uppfylld (minst 5)" : "Ej uppfylld – små teaminsikter döljs"}`,
+      `Aktivt teamfilter: ${selectedTeamFilter}`,
+      `Öppna handlingspunkter (${openActs.length}):`,
+      ...(openActs.length > 0 ? openActs.map((a) => `- [${a.source}] ${a.text}`) : ["- Inga öppna handlingspunkter"]),
+      jointOneOnOneSummary ? `\n${jointOneOnOneSummary}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+
+  const handleCopyReportText = async () => {
+    try {
+      await navigator.clipboard.writeText(buildExecutiveReportText());
+      setReportFormatMsg("Samlat B2B-underlag kopierat till urklipp.");
+      setTimeout(() => setReportFormatMsg(null), 2500);
+    } catch {
+      setReportFormatMsg("Kunde inte kopiera underlaget automatiskt.");
+    }
+  };
+
+  const handleDownloadReportJson = () => {
+    try {
+      const payload = {
+        organization: orgInfo?.name || "Organisation",
+        generated_at: new Date().toISOString(),
+        active_members: activeMemberCount,
+        k_anonymity_min_5_met: kAnonymityMet,
+        team_filter: selectedTeamFilter,
+        action_items: b2bActionItems,
+        one_on_one_summary: jointOneOnOneSummary || null,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "falk-b2b-underlag.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      setReportFormatMsg("JSON-underlag (falk-b2b-underlag.json) nedladdat.");
+      setTimeout(() => setReportFormatMsg(null), 2500);
+    } catch {
+      setReportFormatMsg("Kunde inte ladda ner JSON-underlaget.");
     }
   };
 
@@ -1923,6 +2117,393 @@ export default function B2BPortalPage() {
               )}
             </div>
           )}
+        </section>
+
+        {/* 1. Uppföljning & Åtgärdsflöden: Mallbibliotek + Handlingspunkter */}
+        <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-[#1C211B]">
+              Mallbibliotek & uppföljningsflöde
+            </h2>
+            <p className="text-xs text-[#4E5C4B] mt-0.5">
+              Ladda färdiga mallar in i dina moduler och följ upp konkreta handlingspunkter efter samtal och enkäter.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-[#4E5C4B]/20 bg-white/80 p-3.5 space-y-2">
+              <p className="text-xs font-semibold text-[#1C211B]">Kvartalsvis trygghetskoll</p>
+              <p className="text-[11px] text-[#4E5C4B]">
+                Fokuserar på psykologisk trygghet, öppen dialog och tidig riskhantering.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  handleApplyTemplateToSafety(
+                    [
+                      "Hur tryggt känns det att lyfta invändningar eller misstag utan rädsla för repressalier?",
+                      "Hur väl fungerar samarbetet och stödet när tempot skruvas upp?",
+                      "Vilken förbättring skulle stärka tryggheten i teamet mest nästa kvartal?",
+                    ],
+                    "Kvartalsvis trygghetskoll"
+                  )
+                }
+                className="px-3 py-1.5 rounded-lg bg-[#4E5C4B] text-white text-[11px] font-medium hover:bg-[#3F4B3C] transition"
+              >
+                Använd i Trygghetsenkät
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-[#4E5C4B]/20 bg-white/80 p-3.5 space-y-2">
+              <p className="text-xs font-semibold text-[#1C211B]">Utvecklings- & 1-på-1-mall</p>
+              <p className="text-[11px] text-[#4E5C4B]">
+                Ger struktur för energi, riktning, stödbehov och gemensamma nästa steg.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  handleApplyTemplateToOneOnOne(
+                    [
+                      "Vad har gett dig mest energi och meningsfullhet i arbetet den senaste tiden?",
+                      "Vilka resultat eller lärdomar vill du lyfta fram från perioden som gått?",
+                      "Vad behöver du från mig som chef eller från teamet framåt?",
+                    ],
+                    "Utvecklingssamtal (1-på-1)"
+                  )
+                }
+                className="px-3 py-1.5 rounded-lg bg-[#4E5C4B] text-white text-[11px] font-medium hover:bg-[#3F4B3C] transition"
+              >
+                Använd i Medarbetarsamtal
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-[#4E5C4B]/20 bg-white/80 p-3.5 space-y-2">
+              <p className="text-xs font-semibold text-[#1C211B]">Veckopuls: Riktning & energi</p>
+              <p className="text-[11px] text-[#4E5C4B]">
+                Snabb avstämning av prioriteringar och balans inför veckan.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  handleApplyTemplateToPulse(
+                    [
+                      "Hur tydliga är prioriteringarna för dig just nu?",
+                      "Hur känns balansen mellan belastning och återhämtning denna vecka?",
+                    ],
+                    "Veckopuls – Riktning & balans"
+                  )
+                }
+                className="px-3 py-1.5 rounded-lg bg-[#4E5C4B] text-white text-[11px] font-medium hover:bg-[#3F4B3C] transition"
+              >
+                Använd i Pulsmätning
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-[#4E5C4B]/15 pt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[#1C211B]">
+                Handlingspunkter & uppföljning ({b2bActionItems.filter((a) => !a.done).length} öppna)
+              </span>
+              <span className="text-[11px] text-[#4E5C4B]">
+                Aggregerad status: {activeMemberCount} aktiva medlemmar i organisationen
+              </span>
+            </div>
+
+            <form onSubmit={handleAddActionItem} className="flex flex-col sm:flex-row gap-2">
+              <select
+                value={newActionSource}
+                onChange={(e) => setNewActionSource(e.target.value)}
+                className="rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+              >
+                <option value="Medarbetarsamtal">Medarbetarsamtal</option>
+                <option value="Trygghetsenkät">Trygghetsenkät</option>
+                <option value="Lönesamtal">Lönesamtal</option>
+                <option value="Pulsmätning">Pulsmätning</option>
+              </select>
+              <input
+                type="text"
+                value={newActionText}
+                onChange={(e) => setNewActionText(e.target.value)}
+                placeholder="Lägg till ny handlingspunkt eller uppföljningssteg..."
+                className="flex-1 rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl border border-[#4E5C4B]/30 bg-white text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+              >
+                + Lägg till åtgärd
+              </button>
+            </form>
+
+            <div className="space-y-2">
+              {b2bActionItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[#4E5C4B]/15 bg-white/75 px-3 py-2"
+                >
+                  <label className="flex items-center gap-2.5 text-xs text-[#1C211B] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={() =>
+                        setB2bActionItems((prev) =>
+                          prev.map((a) => (a.id === item.id ? { ...a, done: !a.done } : a))
+                        )
+                      }
+                      className="rounded border-[#4E5C4B]/40"
+                    />
+                    <span className={item.done ? "line-through text-[#4E5C4B]" : ""}>
+                      {item.text}
+                    </span>
+                  </label>
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#EFE7D6] text-[#4E5C4B] shrink-0">
+                    {item.source}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {followupStatusMsg && (
+              <p className="text-xs font-medium text-[#2E5A36] bg-[#E3EFE5] border border-[#2E5A36]/20 rounded-xl px-3 py-2">
+                {followupStatusMsg}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={followupDispatching}
+                onClick={handleDispatchFollowupReminders}
+                className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] disabled:opacity-50 transition"
+              >
+                {followupDispatching
+                  ? "Skickar uppföljning..."
+                  : "Skicka handlingspunkter till Påminnelser"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. Ledarskaps- & Chefstöd i Vardagen: Situationsguider + 30-90 dagars onboarding */}
+        <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-[#1C211B]">
+                Ledarskaps- & chefstöd i vardagen
+              </h2>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                Samtalsguider för känsliga lägen och tydlig 30–90-dagarsstruktur för nya medarbetare och roller.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(["30d", "60d", "90d"] as const).map((stage) => (
+                <button
+                  key={stage}
+                  type="button"
+                  onClick={() => setOnboardingStage(stage)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
+                    onboardingStage === stage
+                      ? "bg-[#4E5C4B] text-white border-[#4E5C4B]"
+                      : "bg-white text-[#1C211B] border-[#4E5C4B]/25"
+                  }`}
+                >
+                  {stage === "30d" ? "Dag 30" : stage === "60d" ? "Dag 60" : "Dag 90"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {leaderGuides.map((guide) => (
+              <button
+                key={guide.id}
+                type="button"
+                onClick={() => setSelectedGuideId(guide.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium border transition ${
+                  selectedGuideId === guide.id
+                    ? "bg-[#4E5C4B] text-white border-[#4E5C4B]"
+                    : "bg-white text-[#1C211B] border-[#4E5C4B]/25"
+                }`}
+              >
+                {guide.title}
+              </button>
+            ))}
+          </div>
+
+          {(() => {
+            const guide = leaderGuides.find((g) => g.id === selectedGuideId) || leaderGuides[0];
+            return (
+              <div className="rounded-xl border border-[#4E5C4B]/20 bg-white/85 p-4 space-y-3">
+                <div>
+                  <h3 className="text-xs font-semibold text-[#1C211B]">{guide.title}</h3>
+                  <p className="text-[11px] text-[#4E5C4B]">{guide.situation}</p>
+                </div>
+                <ul className="space-y-1.5 text-xs text-[#1C211B] list-disc pl-5">
+                  {guide.prompts.map((p, idx) => (
+                    <li key={idx}>{p}</li>
+                  ))}
+                </ul>
+                <div>
+                  <label className="block text-xs font-medium text-[#1C211B] mb-1">
+                    Chefanteckning för vald guide
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={guideNotes[guide.id] || ""}
+                    onChange={(e) =>
+                      setGuideNotes((prev) => ({ ...prev, [guide.id]: e.target.value }))
+                    }
+                    placeholder="Skriv nyckelpunkter eller förberedelser inför samtalet..."
+                    className="w-full rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-2 text-xs text-[#1C211B]"
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="rounded-xl border border-[#4E5C4B]/15 bg-[#EFE7D6]/65 p-3.5 text-xs text-[#1C211B]">
+            <span className="font-semibold">
+              Fokus{" "}
+              {onboardingStage === "30d"
+                ? "första 30 dagarna"
+                : onboardingStage === "60d"
+                ? "dag 31–60"
+                : "dag 61–90"}
+              :{" "}
+            </span>
+            {onboardingStage === "30d"
+              ? "Tydlig introduktion, förväntningar, nyckelkontakter och trygghet att ställa frågor."
+              : onboardingStage === "60d"
+              ? "Ökat självständigt ansvar, återkoppling på tidiga leveranser och avstämning av arbetsbelastning."
+              : "Fullt rollmandat, långsiktiga mål, utvecklingsplan och uppföljning av riktning & trivsel."}
+          </div>
+        </section>
+
+        {/* 3. Organisation, Rollstruktur & Administration + 4. Integritet & Rapportering */}
+        <section className="bg-[#F7F2E8] border border-[#4E5C4B]/20 rounded-2xl p-6 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-[#1C211B]">
+                Organisation, teamindelning & anonymitetsgaranti
+              </h2>
+              <p className="text-xs text-[#4E5C4B] mt-0.5">
+                Överblick av roller, teamtillhörighet och anonymitetströskel (minst 5 personer för teaminsikter).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-[#4E5C4B]">Teamfilter:</label>
+              <select
+                value={selectedTeamFilter}
+                onChange={(e) => setSelectedTeamFilter(e.target.value)}
+                className="rounded-xl border border-[#4E5C4B]/25 bg-white px-3 py-1.5 text-xs text-[#1C211B]"
+              >
+                <option value="Alla team">Alla team</option>
+                <option value="Kärnteam">Kärnteam</option>
+                <option value="Leverans & Produkt">Leverans & Produkt</option>
+                <option value="Ledning & HR">Ledning & HR</option>
+              </select>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-xl border px-4 py-3 text-xs ${
+              kAnonymityMet
+                ? "bg-[#E3EFE5] border-[#2E5A36]/25 text-[#1E4427]"
+                : "bg-[#FBF0DC] border-[#9A6700]/30 text-[#664300]"
+            }`}
+          >
+            <p className="font-semibold">
+              {kAnonymityMet
+                ? `Anonymitetskrav uppfyllt (${activeMemberCount} aktiva medlemmar – minst 5 personer)`
+                : `Anonymitetsspärr aktiv (${activeMemberCount} av minst 5 aktiva medlemmar)`}
+            </p>
+            <p className="mt-0.5 text-[11px]">
+              {kAnonymityMet
+                ? "Aggregerade teaminsikter kan visas utan att enskilda svar eller profiler kopplas till individer."
+                : "Vid färre än 5 personer i ett team eller en mätning visas inga enskilda insiktsprofiler för att skydda medarbetarnas integritet (GDPR/RLS & minst 5 personer)."}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-[#4E5C4B]/15 bg-white/80 p-3">
+              <p className="text-[11px] text-[#4E5C4B]">Aktiva medlemmar</p>
+              <p className="text-lg font-semibold text-[#1C211B] mt-0.5">{activeMemberCount}</p>
+            </div>
+            <div className="rounded-xl border border-[#4E5C4B]/15 bg-white/80 p-3">
+              <p className="text-[11px] text-[#4E5C4B]">Aktiva inbjudningar</p>
+              <p className="text-lg font-semibold text-[#1C211B] mt-0.5">
+                {invites.filter((i) => i.is_active && i.used_count < i.max_uses).length}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#4E5C4B]/15 bg-white/80 p-3">
+              <p className="text-[11px] text-[#4E5C4B]">Avslutade medlemskap</p>
+              <p className="text-lg font-semibold text-[#1C211B] mt-0.5">
+                {members.filter((m) => m.status !== "active").length}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-[#1C211B]">Medlemmar & roller</p>
+            <div className="divide-y divide-[#4E5C4B]/15 rounded-xl border border-[#4E5C4B]/15 bg-white/80">
+              {members
+                .filter((m) => {
+                  const team = memberTeams[m.user_id] || "Kärnteam";
+                  return selectedTeamFilter === "Alla team" || team === selectedTeamFilter;
+                })
+                .map((m) => {
+                  const currentTeam = memberTeams[m.user_id] || "Kärnteam";
+                  return (
+                    <div
+                      key={m.user_id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3.5 py-2.5 text-xs"
+                    >
+                      <div>
+                        <p className="font-medium text-[#1C211B]">{m.email || m.user_id}</p>
+                        <p className="text-[11px] text-[#4E5C4B]">
+                          Roll: {formatRole(m.role)} · Status: {m.status}
+                        </p>
+                      </div>
+                      <select
+                        value={currentTeam}
+                        onChange={(e) =>
+                          setMemberTeams((prev) => ({ ...prev, [m.user_id]: e.target.value }))
+                        }
+                        className="rounded-lg border border-[#4E5C4B]/25 bg-white px-2.5 py-1 text-xs text-[#1C211B]"
+                      >
+                        <option value="Kärnteam">Kärnteam</option>
+                        <option value="Leverans & Produkt">Leverans & Produkt</option>
+                        <option value="Ledning & HR">Ledning & HR</option>
+                      </select>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {reportFormatMsg && (
+            <p className="text-xs font-medium text-[#2E5A36] bg-[#E3EFE5] border border-[#2E5A36]/20 rounded-xl px-3 py-2">
+              {reportFormatMsg}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleCopyReportText}
+              className="px-4 py-2 rounded-xl bg-[#4E5C4B] text-white text-xs font-medium hover:bg-[#3F4B3C] transition"
+            >
+              Kopiera samlat B2B-underlag
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadReportJson}
+              className="px-4 py-2 rounded-xl border border-[#4E5C4B]/30 bg-white text-xs font-medium text-[#1C211B] hover:bg-[#E8DCC4]/60 transition"
+            >
+              Ladda ner JSON-underlag
+            </button>
+          </div>
         </section>
 
         {/* Skapa inbjudningskod & aktiva koder */}
