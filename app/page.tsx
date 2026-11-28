@@ -1625,12 +1625,17 @@ const [cardContext, setCardContext] = useState<{
         </button>
 
         {/* Mitten: FALK-logga */}
-        <button aria-label="FALK – Startsida"
+        <button
           type="button"
           onClick={handleNewChat}
-          className="absolute left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-bold tracking-[0.22em] uppercase select-none"
+          aria-label="FALK – Startsida"
+          className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center select-none"
         >
-          <FalkLogo className="h-5 w-auto" title="FALK" />
+          <img
+            src="/unnamed.png"
+            alt="FALK – Startsida"
+            className="h-7 sm:h-8 w-auto object-contain"
+          />
         </button>
 
         {/* Höger: Plus (ny chatt) + Glödlampa (Insikter & Påminnelser) */}
