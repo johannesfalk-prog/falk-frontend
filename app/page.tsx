@@ -53,6 +53,7 @@ import ActionModals, { ActiveModalType } from '../components/ActionModals';
 import CalibrationModal from '../components/CalibrationModal';
 import LibraryView from '../components/LibraryView';
 import DashboardView from '../components/DashboardView';
+import { FalkLogo } from '@/components/FalkLogo';
 
 const FOCUS_KEYS: (keyof FocusSliders)[] = [
   'Självförtroende',
@@ -1624,12 +1625,12 @@ const [cardContext, setCardContext] = useState<{
         </button>
 
         {/* Mitten: FALK-logga */}
-        <button
+        <button aria-label="FALK – Startsida"
           type="button"
           onClick={handleNewChat}
           className="absolute left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-bold tracking-[0.22em] uppercase select-none"
         >
-          FALK
+          <FalkLogo className="h-5 w-auto" title="FALK" />
         </button>
 
         {/* Höger: Plus (ny chatt) + Glödlampa (Insikter & Påminnelser) */}
